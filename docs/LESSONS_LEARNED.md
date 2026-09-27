@@ -20,7 +20,7 @@ recompiled function for guest address 0xXXXXXXXX.
 | `_mm_shuffle_epi8 requires ssse3` in SDK sources | The game project (outer CMake) did not pass `-march` to the SDK subdirectory | Configure the game with `-march=x86-64-v3 -ffp-contract=off` (release) or at least v2 | E007, EXP-047 |
 | `imgui.h not found` compiling rex_app.cpp | REXSDK_DIR (add_subdirectory) mode does not export imgui includes | `target_link_libraries(<game> PRIVATE imgui::imgui)` | E008 |
 | Stale behaviour after an SDK change | CMake copies SDK DLLs only when the exe relinks | Always build with `bench/build.sh` (syncs rexruntime.dll) | EXP-005 |
-| CMake cannot find fmt/xxHash/imgui... in `sdk/thirdparty` on a kit cloned from GitHub | Vendored third-party code is gitignored (~400 MB) | `bash scripts/restore_sdk_thirdparty.sh` (SDK base pins + kit patches) | kit |
+| CMake cannot find fmt/xxHash/imgui... in `sdk/thirdparty` | An entry was deleted or emptied (the vendored code is in git) | `git checkout -- sdk/thirdparty/<name>` or `bash scripts/restore_sdk_thirdparty.sh <name>` (SDK base pin + kit patch) | kit |
 | `Git submodule 'x' is not initialized` with the kit SDK | Vendored copy has no `.git` | Already patched in the kit (`sdk/thirdparty/CMakeLists.txt` accepts vendored content) | kit |
 
 ## B. Codegen (phase 1): "0 errors" is not "complete"

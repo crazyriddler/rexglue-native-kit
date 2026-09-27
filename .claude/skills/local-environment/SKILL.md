@@ -7,6 +7,5 @@ description: Verify or repair the local toolchain (clang, xwin, ninja, cmake, py
 docs/TOOLCHAIN_SETUP.md lists every tool, its location on this PC and how it was obtained
 without admin rights. Verify with `source scripts/dev_env.sh`; fix kit.env paths; install
 only what the current task needs; never change system settings.
-- Fresh GitHub clone (`sdk/thirdparty/` holds only CMakeLists.txt):
-  `bash scripts/restore_sdk_thirdparty.sh`.
+- `sdk/thirdparty/` is in git; a missing or empty entry: `bash scripts/restore_sdk_thirdparty.sh <name>`.
 - Kit self-test: `python -m pytest scripts/tests` (pytest + a C++ compiler).

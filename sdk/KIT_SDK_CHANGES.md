@@ -13,9 +13,10 @@ Runtime / performance
 - High-resolution timing: `timeBeginPeriod(1)`, waitable-timer sleeps, vblank worker that
   waits out the interval and delivers at most one vblank per wake (E049).
 - TimerQueue uses a blocking wait strategy (was spinning ~18% of a core); the vendored
-  disruptorplus `wait_for`/`wait_until` argument order fixed (EXP-040). Kept as
-  `sdk/patches/thirdparty/0001-disruptorplus-wait-arg-order.patch` because `thirdparty/*/`
-  is not in git; `scripts/restore_sdk_thirdparty.sh` re-applies it on a fresh clone.
+  disruptorplus `wait_for`/`wait_until` argument order fixed (EXP-040). Applied in the
+  vendored `thirdparty/disruptorplus` and kept as
+  `sdk/patches/thirdparty/0001-disruptorplus-wait-arg-order.patch`
+  (`scripts/restore_sdk_thirdparty.sh` re-applies it when re-vendoring the entry).
 - Occlusion queries resolved one frame late, never waiting on the GPU (E050).
 - `clear_memory_page_state` default false (E051); `readback_memexport` default false;
   primitive processor cache min 4096 indices; quad lists as triangle lists (E048).

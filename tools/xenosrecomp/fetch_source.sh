@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Fetch the pinned reblue-XenosRecomp source into tools/xenosrecomp/src and
-# apply tools/xenosrecomp/patches/*.patch. Idempotent: re-running resets src/.
+# Re-vendor tools/xenosrecomp/src: pinned reblue-XenosRecomp + tools/xenosrecomp/patches/*.patch,
+# stored without .git (the kit ships src/ already patched; run this only after changing the
+# pin or a patch). Replaces src/ entirely.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
@@ -8,23 +9,21 @@ REPO_URL="https://github.com/zolaware/reblue-XenosRecomp"
 PIN="339af41df2c23dbe3256c1c377716b81a0e0fe6b"
 LOCAL_MIRROR="$ROOT/_research/upstream/reblue-XenosRecomp"
 SRC="$HERE/src"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
 
-if [ -d "$SRC/.git" ] && [ "$(git -C "$SRC" rev-parse HEAD)" = "$PIN" ]; then
-  git -C "$SRC" reset -q --hard "$PIN"
-  git -C "$SRC" clean -qfdx
+if [ -d "$LOCAL_MIRROR/.git" ] && git -C "$LOCAL_MIRROR" cat-file -e "$PIN^{commit}" 2>/dev/null; then
+  git clone -q --no-checkout "$LOCAL_MIRROR" "$TMP/src"
 else
-  rm -rf "$SRC"
-  if [ -d "$LOCAL_MIRROR/.git" ] && git -C "$LOCAL_MIRROR" cat-file -e "$PIN^{commit}" 2>/dev/null; then
-    git clone -q --no-checkout "$LOCAL_MIRROR" "$SRC"
-  else
-    git clone -q --no-checkout "$REPO_URL" "$SRC"
-  fi
-  git -C "$SRC" -c advice.detachedHead=false checkout -q "$PIN"
+  git clone -q --no-checkout "$REPO_URL" "$TMP/src"
 fi
+git -C "$TMP/src" -c advice.detachedHead=false checkout -q "$PIN"
 
 shopt -s nullglob
 for p in "$HERE"/patches/*.patch; do
   echo "[xenosrecomp] applying $(basename "$p")"
-  git -C "$SRC" apply --whitespace=nowarn "$p"
+  git -C "$TMP/src" apply --whitespace=nowarn "$p"
 done
-echo "[xenosrecomp] source ready at $SRC ($(git -C "$SRC" rev-parse --short HEAD) + patches)"
+rm -rf "$TMP/src/.git" "$SRC"
+mv "$TMP/src" "$SRC"
+echo "[xenosrecomp] source vendored at $SRC (${PIN:0:7} + patches)"
