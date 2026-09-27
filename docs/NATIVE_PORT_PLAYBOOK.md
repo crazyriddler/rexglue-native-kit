@@ -14,7 +14,7 @@ run in parallel. Before a phase, read its LESSONS_LEARNED section.
 ```text
 kit.env                 game name, port dir, title id, toolchain paths, bench defaults
 sdk/                    ReXGlue v0.10.0 fork (base c94f5eb + sdk/KIT_SDK_CHANGES.md);
-                        thirdparty/ vendored, gitignored (fresh clone: scripts/restore_sdk_thirdparty.sh)
+                        thirdparty/ vendored in git, kit patches applied
 game/                   <- the user drops the game here (default.xex + data)
 port/                   created in phase 0 by `rexglue init` (manifest, src/, generated/, docs/error_log.md)
 bench/                  run/run_safe/build/ab/repro/opt scripts, scenario_*.txt, userdata_template/
@@ -32,8 +32,8 @@ _research/upstream/     disposable clones of other projects (gitignored)
 
 **Do**
 1. `source scripts/dev_env.sh`; verify clang, ninja, cmake, python modules
-   (TOOLCHAIN_SETUP, `/local-environment`). If `sdk/thirdparty/` holds only `CMakeLists.txt`
-   (kit cloned from GitHub): `bash scripts/restore_sdk_thirdparty.sh`.
+   (TOOLCHAIN_SETUP, `/local-environment`). An `sdk/thirdparty/<name>` entry missing or empty
+   (should not happen, it is in git): `bash scripts/restore_sdk_thirdparty.sh <name>`.
 2. Inventory `game/`: default.xex, extra .xex/.dll modules, `.xexp` title update, sizes,
    SHA-256 of every executable (never modify the originals). Title ID from the XEX header or
    later from the log ("Initializing shader storage for title").

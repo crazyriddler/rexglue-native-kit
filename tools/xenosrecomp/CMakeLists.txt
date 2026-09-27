@@ -1,5 +1,5 @@
 # Out-of-tree build of the XenosRecomp HLSL emitter for the game's shader corpus.
-# Source: tools/xenosrecomp/src (fetch_source.sh = pinned reblue-XenosRecomp + patches/).
+# Source: tools/xenosrecomp/src, vendored = pinned reblue-XenosRecomp + patches/ (fetch_source.sh re-vendors).
 # Deps come from the SDK's thirdparty (fmt, xxHash); no DXC/zstd/smol-v needed.
 cmake_minimum_required(VERSION 3.20)
 project(XenosRecompCorpus CXX)
@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(SDK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../sdk")
 set(XR_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/XenosRecomp")
 if (NOT EXISTS "${XR_SRC}/shader_recompiler.cpp")
-    message(FATAL_ERROR "run tools/xenosrecomp/fetch_source.sh first")
+    message(FATAL_ERROR "tools/xenosrecomp/src is missing: run tools/xenosrecomp/fetch_source.sh")
 endif()
 
 # Game-specific semantics switch (see patches/). OFF = upstream generic behavior.

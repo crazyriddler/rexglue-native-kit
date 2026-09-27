@@ -2,7 +2,7 @@
 # One-command shader corpus pipeline (M4). Regenerates everything under
 # artifacts/shaders and docs/SHADER_CATALOG.md:
 #   1. fetch DXC release into tools/dxc (if missing)
-#   2. fetch pinned reblue-XenosRecomp + apply tools/xenosrecomp/patches, build XenosRecompCorpus
+#   2. build XenosRecompCorpus from the vendored, patched tools/xenosrecomp/src
 #   3. extract containers from $PORT_DIR/game (byte-granular scan) -> raw/ + manifest.json
 #   4. join the Xenos-path runtime shader storage (bench/**/<TITLE_ID>.xsh) -> runtime_join.json
 #   5. translate (HLSL), compile DXIL (+lib_6_3 for spec-constant shaders) and SPIR-V, reflect -> catalog.json + docs
@@ -22,7 +22,7 @@ if [ ! -x "$ROOT/tools/dxc/bin/x64/dxc.exe" ]; then
   printf '*\n!.gitignore\n' > "$ROOT/tools/dxc/.gitignore"
 fi
 
-bash "$ROOT/tools/xenosrecomp/fetch_source.sh"
+[ -f "$ROOT/tools/xenosrecomp/src/XenosRecomp/shader_recompiler.cpp" ] || bash "$ROOT/tools/xenosrecomp/fetch_source.sh"
 set +u; source "$ROOT/scripts/dev_env.sh" >/dev/null; set -u
 cmake -S "$ROOT/tools/xenosrecomp" -B "$ROOT/tools/xenosrecomp/build" -G Ninja \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ >/dev/null

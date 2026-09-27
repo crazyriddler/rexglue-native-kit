@@ -46,7 +46,7 @@ in Git Bash unless noted.
 | Script | Use |
 |---|---|
 | `dev_env.sh` | toolchain environment (source it) |
-| `restore_sdk_thirdparty.sh [names]` | fresh GitHub clone only: rebuild `sdk/thirdparty/` at the SDK base pins + kit patches (docs/TOOLCHAIN_SETUP.md) |
+| `restore_sdk_thirdparty.sh [names]` | re-vendor missing/empty `sdk/thirdparty/` entries at the SDK base pins + kit patches (the entries are in git; docs/TOOLCHAIN_SETUP.md) |
 | `check_vulkan_stack.py` | SDK Vulkan submodule pins; in the kit (vendored SDK) it only reports that pins are not checkable |
 | `tests/` (`python -m pytest scripts/tests`) | codegen semantics (sraw/srad), xdk_layout.py, check_vulkan_stack |
 | `port/xex_decode.py <xex> <out.bin>` | decrypt + decompress (basic compression) to a flat image at 0x82000000 |

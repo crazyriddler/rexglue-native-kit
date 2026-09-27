@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Restore sdk/thirdparty/ in a kit cloned from GitHub.
+# Re-vendor sdk/thirdparty/ entries.
 #
-# The kit vendors the SDK's third-party code (~400 MB, no submodules), and that content is
-# gitignored (.gitignore: sdk/thirdparty/*/): a clone has only sdk/thirdparty/CMakeLists.txt.
-# This script rebuilds it exactly as the kit expects:
+# The kit vendors the SDK's third-party code in git (~400 MB, no submodules, kit patches
+# applied), so a clone needs nothing. Use this only to rebuild a deleted or empty entry,
+# exactly as the kit expects:
 #   - every entry of upstream rexglue-sdk thirdparty/ at the kit's base commit (c94f5eb):
 #     plain directories are copied from that commit, submodules are fetched at the commit
 #     that base pins (sdk/.gitmodules gives the URLs), without .git (vendored layout);

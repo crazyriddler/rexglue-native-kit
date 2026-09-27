@@ -18,15 +18,13 @@ reblue, skate3recomp, The Darkness Recomp, LostOdysseyRecomp, AC6_recomp and mor
 
 1. Copy or clone this repository to a new folder per game (a path without spaces is best).
    Keep a pristine copy of the kit as a template.
-2. **Cloned from GitHub?** The SDK's third-party code (~400 MB) is not in the repository:
-   run `bash scripts/restore_sdk_thirdparty.sh` once (Git Bash, network needed).
-3. Put the game in `game/`: `default.xex`, any other `.xex`/`.dll` modules and all data
+2. Put the game in `game/`: `default.xex`, any other `.xex`/`.dll` modules and all data
    folders, as extracted from the disc (see `game/README.md` for title updates).
-4. Set the toolchain paths in `kit.env` (docs/TOOLCHAIN_SETUP.md explains how to install
+3. Set the toolchain paths in `kit.env` (docs/TOOLCHAIN_SETUP.md explains how to install
    everything without admin rights).
-5. Open Claude Code in the folder and paste `START_PROMPT.md`, or run
+4. Open Claude Code in the folder and paste `START_PROMPT.md`, or run
    `START_CLAUDE_FULL_ACCESS.cmd` (starts Claude Code with that prompt and full permissions).
-6. To continue another day: `RESUME_CLAUDE_FULL_ACCESS.cmd` or paste `RESUME_PROMPT.md`.
+5. To continue another day: `RESUME_CLAUDE_FULL_ACCESS.cmd` or paste `RESUME_PROMPT.md`.
 
 Claude Code works autonomously, records its state in `docs/PROJECT_STATE.md` and reports
 short progress notes in the language you write to it.
@@ -50,7 +48,7 @@ launcher -> 10 release.
 
 | Path | Content |
 |---|---|
-| `sdk/` | ReXGlue v0.10.0 fork (base upstream `c94f5eb`); changes in `sdk/KIT_SDK_CHANGES.md`, third-party patches in `sdk/patches/thirdparty/` |
+| `sdk/` | ReXGlue v0.10.0 fork (base upstream `c94f5eb`) with all its third-party code vendored (a clone builds without extra downloads); changes in `sdk/KIT_SDK_CHANGES.md`, third-party patches in `sdk/patches/thirdparty/` |
 | `game/` | Drop zone for the game (moved to `port/game` in phase 0) |
 | `docs/` | Knowledge base and `templates/` for the per-game state files |
 | `reference/conan/` | The complete worked example: port sources (native renderer, NativeGraphicsSystem, launcher), commented manifest, error log E001-E051, experiment log EXP-001-048 |

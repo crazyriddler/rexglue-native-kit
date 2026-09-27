@@ -1,0 +1,4 @@
+# Vendored third-party code: store and check out the exact upstream bytes (no line-ending
+# conversion). The libraries' own .gitattributes are kept as .gitattributes.upstream.
+* -text
+.gitattributes -text

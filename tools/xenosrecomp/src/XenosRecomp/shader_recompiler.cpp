@@ -1,0 +1,2597 @@
+#include "shader_recompiler.h"
+#include "shader_common.h"
+
+static constexpr char SWIZZLES[] = 
+{ 
+    'x',
+    'y', 
+    'z', 
+    'w', 
+    '0', 
+    '1',
+    '_',
+    '_'
+};
+
+
+// CONAN_RECOMP: relative constant operands are emitted through CONST_REL()
+// using the ucode.h src_const_is_addressed() slot rules, so the legacy
+// per-operand const0Relative handling below is disabled.
+#ifdef CONAN_RECOMP
+#define LEGACY_CONST_REL(instr) false
+#define LEGACY_CONST_REL_ANY(instr) false
+#define PS_FLOAT_CONSTANT_COUNT 256
+#else
+#define LEGACY_CONST_REL(instr) ((instr).const0Relative)
+#define LEGACY_CONST_REL_ANY(instr) ((instr).const0Relative || (instr).const1Relative)
+#define PS_FLOAT_CONSTANT_COUNT 224
+#endif
+
+static constexpr const char* USAGE_TYPES[] =
+{
+    "float4", // POSITION
+    "float4", // BLENDWEIGHT
+    "uint4", // BLENDINDICES
+#ifdef REBLUE_RECOMP
+    // BD IA-decodes SNORM normals to float; swapFloats() undoes the engine int16-pair swap, DEC3N goes through tfetchR11G11B10().
+    "float4", // NORMAL
+#else
+    "uint4", // NORMAL
+#endif
+    "float4", // PSIZE
+    "float4", // TEXCOORD
+#ifdef REBLUE_RECOMP
+    "float4", // TANGENT
+    "float4", // BINORMAL
+#else
+    "uint4", // TANGENT
+    "uint4", // BINORMAL
+#endif
+    "float4", // TESSFACTOR
+    "float4", // POSITIONT
+    "float4", // COLOR
+    "float4", // FOG
+    "float4", // DEPTH
+    "float4", // SAMPLE
+};
+
+static constexpr const char* USAGE_VARIABLES[] =
+{
+    "Position",
+    "BlendWeight",
+    "BlendIndices",
+    "Normal",
+    "PointSize",
+    "TexCoord",
+    "Tangent",
+    "Binormal",
+    "TessFactor",
+    "PositionT",
+    "Color",
+    "Fog",
+    "Depth",
+    "Sample"
+};
+
+static constexpr const char* USAGE_SEMANTICS[] =
+{
+    "POSITION",
+    "BLENDWEIGHT",
+    "BLENDINDICES",
+    "NORMAL",
+    "PSIZE",
+    "TEXCOORD",
+    "TANGENT",
+    "BINORMAL",
+    "TESSFACTOR",
+    "POSITIONT",
+    "COLOR",
+    "FOG",
+    "DEPTH",
+    "SAMPLE"
+};
+
+struct DeclUsageLocation
+{
+    DeclUsage usage;
+    uint32_t usageIndex;
+    uint32_t location;
+};
+
+static constexpr DeclUsageLocation USAGE_LOCATIONS[] =
+{
+#ifdef REBLUE_RECOMP
+    #define REBLUE_VERTEX_LOCATION_ROW(usage, index, location) { DeclUsage::usage, index, location },
+    REBLUE_VERTEX_INPUT_LOCATIONS(REBLUE_VERTEX_LOCATION_ROW)
+    #undef REBLUE_VERTEX_LOCATION_ROW
+#else
+    { DeclUsage::Position, 0, 0 },
+    { DeclUsage::Normal, 0, 1 },
+    { DeclUsage::Tangent, 0, 2 },
+    { DeclUsage::Binormal, 0, 3 },
+    { DeclUsage::TexCoord, 0, 4 },
+    { DeclUsage::TexCoord, 1, 5 },
+    { DeclUsage::TexCoord, 2, 6 },
+    { DeclUsage::TexCoord, 3, 7 },
+    { DeclUsage::Color, 0, 8 },
+    { DeclUsage::BlendIndices, 0, 9 },
+    { DeclUsage::BlendWeight, 0, 10 },
+    { DeclUsage::Color, 1, 11 },
+    { DeclUsage::TexCoord, 4, 12 },
+    { DeclUsage::TexCoord, 5, 13 },
+    { DeclUsage::TexCoord, 6, 14 },
+    { DeclUsage::TexCoord, 7, 15 },
+    { DeclUsage::Position, 1, 15 },
+#endif
+};
+
+static constexpr std::pair<DeclUsage, size_t> INTERPOLATORS[] =
+{
+    { DeclUsage::TexCoord, 0 },
+    { DeclUsage::TexCoord, 1 },
+    { DeclUsage::TexCoord, 2 },
+    { DeclUsage::TexCoord, 3 },
+    { DeclUsage::TexCoord, 4 },
+    { DeclUsage::TexCoord, 5 },
+    { DeclUsage::TexCoord, 6 },
+    { DeclUsage::TexCoord, 7 },
+    { DeclUsage::TexCoord, 8 },
+    { DeclUsage::TexCoord, 9 },
+    { DeclUsage::TexCoord, 10 },
+    { DeclUsage::TexCoord, 11 },
+    { DeclUsage::TexCoord, 12 },
+    { DeclUsage::TexCoord, 13 },
+    { DeclUsage::TexCoord, 14 },
+    { DeclUsage::TexCoord, 15 },
+    { DeclUsage::Color, 0 },
+    { DeclUsage::Color, 1 }
+};
+
+static constexpr std::string_view TEXTURE_DIMENSIONS[] = 
+{
+    "2D",
+    "3D", 
+    "Cube" 
+};
+
+static FetchDestinationSwizzle getDestSwizzle(uint32_t dstSwizzle, uint32_t index)
+{
+    return FetchDestinationSwizzle((dstSwizzle >> (index * 3)) & 0x7);
+}
+
+void ShaderRecompiler::printDstSwizzle(uint32_t dstSwizzle, bool operand)
+{
+    for (size_t i = 0; i < 4; i++)
+    {
+        const auto swizzle = getDestSwizzle(dstSwizzle, i);
+        if (swizzle >= FetchDestinationSwizzle::X && swizzle <= FetchDestinationSwizzle::W)
+            out += SWIZZLES[operand ? uint32_t(swizzle) : i];
+    }
+}
+
+void ShaderRecompiler::printDstSwizzle01(uint32_t dstRegister, uint32_t dstSwizzle)
+{
+    for (size_t i = 0; i < 4; i++)
+    {
+        const auto swizzle = getDestSwizzle(dstSwizzle, i);
+        if (swizzle == FetchDestinationSwizzle::Zero)
+        {
+            indent();
+            println("r{}.{} = 0.0;", dstRegister, SWIZZLES[i]);
+        }
+        else if (swizzle == FetchDestinationSwizzle::One)
+        {
+            indent();
+            println("r{}.{} = 1.0;", dstRegister, SWIZZLES[i]);
+        }
+    }
+}
+
+void ShaderRecompiler::recompile(const VertexFetchInstruction& instr, uint32_t address)
+{
+    if (instr.isPredicated)
+    {
+        indent();
+        println("if ({}p0)", instr.predicateCondition ? "" : "!");
+
+        indent();
+        out += "{\n";
+        ++indentation;
+    }
+
+    indent();
+    print("r{}.", instr.dstRegister);
+    printDstSwizzle(instr.dstSwizzle, false);
+
+    out += " = ";
+
+    auto findResult = vertexElements.find(address);
+    assert(findResult != vertexElements.end());
+
+#ifdef REBLUE_RECOMP
+    // Wrap each 16-bit-packed semantic in swapFloats() (per-usage mask); TEXCOORD also runs sintTexcoord() for raw-int bindings.
+    switch (findResult->second.usage)
+    {
+    case DeclUsage::Normal:
+        specConstantsMask |= SPEC_CONSTANT_R11G11B10_NORMAL;
+        print("tfetchR11G11B10(swapFloats(g_SwappedNormals, ");
+        break;
+    case DeclUsage::Tangent:
+        specConstantsMask |= SPEC_CONSTANT_R11G11B10_NORMAL;
+        print("tfetchR11G11B10(swapFloats(g_SwappedTangents, ");
+        break;
+    case DeclUsage::Binormal:
+        specConstantsMask |= SPEC_CONSTANT_R11G11B10_NORMAL;
+        print("tfetchR11G11B10(swapFloats(g_SwappedBinormals, ");
+        break;
+    case DeclUsage::BlendWeight:
+        print("swapFloats(g_SwappedBlendWeights, ");
+        break;
+    case DeclUsage::TexCoord:
+        print("sintTexcoord(g_SintTexcoords, swapFloats(g_SwappedTexcoords, ");
+        break;
+    case DeclUsage::Position:
+        print("swapFloats(g_SwappedPositions, ");
+        break;
+    }
+#else
+    switch (findResult->second.usage)
+    {
+    case DeclUsage::Normal:
+    case DeclUsage::Tangent:
+    case DeclUsage::Binormal:
+        specConstantsMask |= SPEC_CONSTANT_R11G11B10_NORMAL;
+        print("tfetchR11G11B10(");
+        break;
+
+    case DeclUsage::TexCoord:
+        print("tfetchTexcoord(g_SwappedTexcoords, ");
+        break;
+    }
+#endif
+
+    print("i{}{}", USAGE_VARIABLES[uint32_t(findResult->second.usage)], uint32_t(findResult->second.usageIndex));
+
+#ifdef REBLUE_RECOMP
+    switch (findResult->second.usage)
+    {
+    case DeclUsage::Normal:
+    case DeclUsage::Tangent:
+    case DeclUsage::Binormal:
+        print(", {}))", uint32_t(findResult->second.usageIndex));
+        break;
+
+    case DeclUsage::TexCoord:
+        print(", {}), {})", uint32_t(findResult->second.usageIndex),
+              uint32_t(findResult->second.usageIndex));
+        break;
+
+    case DeclUsage::BlendWeight:
+    case DeclUsage::Position:
+        print(", {})", uint32_t(findResult->second.usageIndex));
+        break;
+    }
+#else
+    switch (findResult->second.usage)
+    {
+    case DeclUsage::Normal:
+    case DeclUsage::Tangent:
+    case DeclUsage::Binormal:
+        out += ')';
+        break;
+
+    case DeclUsage::TexCoord:
+        print(", {})", uint32_t(findResult->second.usageIndex));
+        break;
+    }
+#endif
+
+    out += '.';
+    printDstSwizzle(instr.dstSwizzle, true);
+
+    out += ";\n";
+
+    printDstSwizzle01(instr.dstRegister, instr.dstSwizzle);
+
+    if (instr.isPredicated)
+    {
+        --indentation;
+        indent();
+        out += "}\n";
+    }
+}
+
+void ShaderRecompiler::recompile(const TextureFetchInstruction& instr, bool bicubic)
+{
+    if (instr.opcode != FetchOpcode::TextureFetch && instr.opcode != FetchOpcode::GetTextureWeights)
+        return;
+
+#ifdef CONAN_RECOMP
+    // Per-instruction filter overrides (3 = use the fetch constant; aniso 7 =
+    // use the fetch constant): collected by tools/shaders/build_catalog.py into
+    // the renderer's sampler override table.
+    if (instr.opcode == FetchOpcode::TextureFetch)
+        out += fmt::format("// conan_tfetch slot={} mag={} min={} mip={} aniso={}\n",
+            uint32_t(instr.constIndex), uint32_t(instr.magFilter), uint32_t(instr.minFilter),
+            uint32_t(instr.mipFilter), uint32_t(instr.anisoFilter));
+#endif
+
+    if (instr.isPredicated)
+    {
+        indent();
+        println("if ({}p0)", instr.predCondition ? "" : "!");
+
+        indent();
+        out += "{\n";
+        ++indentation;
+    }
+
+    auto printSrcRegister = [&](size_t componentCount)
+        {
+            print("r{}.", instr.srcRegister);
+
+            for (size_t i = 0; i < componentCount; i++)
+                out += SWIZZLES[((instr.srcSwizzle >> (i * 2))) & 0x3];
+        };
+
+    std::string constName;
+    const char* constNamePtr = nullptr;
+#ifdef UNLEASHED_RECOMP
+    bool subtractFromOne = false;
+#endif
+
+    auto findResult = samplers.find(instr.constIndex);
+    if (findResult != samplers.end())
+    {
+        constNamePtr = findResult->second;
+
+    #ifdef UNLEASHED_RECOMP
+        subtractFromOne = hasMtxPrevInvViewProjection && strcmp(constNamePtr, "sampZBuffer") == 0;
+    #endif
+    }
+    else
+    {
+        constName = fmt::format("s{}", instr.constIndex);
+        constNamePtr = constName.c_str();
+    }
+
+#if defined(UNLEASHED_RECOMP) || defined(CONAN_RECOMP)
+    if (instr.constIndex == 0 && instr.dimension == TextureDimension::Texture2D)
+    {
+        indent();
+        print("pixelCoord = getPixelCoord({}_Texture2DDescriptorIndex, ", constNamePtr);
+        printSrcRegister(2);
+        out += ");\n";
+    }
+#endif
+
+#ifdef REBLUE_RECOMP
+    // Stashed before the fetch statement: the kernel reuses UV registers as
+    // fetch destinations (r6.y = tfetch2D(..., r6.yw)).
+    const bool shadowTap = hasShadowTexture && !instr.isPredicated &&
+        instr.opcode == FetchOpcode::TextureFetch &&
+        instr.dimension == TextureDimension::Texture2D &&
+        strcmp(constNamePtr, "ShadowTexture") == 0 &&
+        instr.offsetX == 0 && instr.offsetY == 0 && shadowTapUVCount < 8;
+    if (shadowTap)
+    {
+        indent();
+        print("shadowTapUV[{}] = ", shadowTapUVCount);
+        printSrcRegister(2);
+        out += ";\n";
+    }
+#endif
+
+    indent();
+    print("r{}.", instr.dstRegister);
+    printDstSwizzle(instr.dstSwizzle, false);
+
+    out += " = ";
+    switch (instr.opcode)
+    {
+    case FetchOpcode::TextureFetch:
+    {
+    #ifdef UNLEASHED_RECOMP
+        if (subtractFromOne)
+            out += "1.0 - ";
+    #endif
+
+        out += "tfetch";
+        break;
+    }
+    case FetchOpcode::GetTextureWeights:
+    {
+        out += "getWeights";
+        break;
+    }
+    }
+
+    std::string_view dimension;
+    uint32_t componentCount = 0;
+
+    switch (instr.dimension)
+    {
+    case TextureDimension::Texture1D:
+        dimension = "1D";
+        componentCount = 1;
+        break;
+    case TextureDimension::Texture2D:
+        dimension = "2D";
+        componentCount = 2;
+        break;
+    case TextureDimension::Texture3D:
+        dimension = "3D";
+        componentCount = 3;
+        break;
+    case TextureDimension::TextureCube:
+        dimension = "Cube";
+        componentCount = 3;
+        break;
+    }
+
+    out += dimension;
+
+#ifdef UNLEASHED_RECOMP
+    if (bicubic)
+        out += "Bicubic";
+#endif
+
+    print("({0}_Texture{1}DescriptorIndex, {0}_SamplerDescriptorIndex, ", constNamePtr, dimension);
+    printSrcRegister(componentCount);
+
+    switch (instr.dimension)
+    {
+    case TextureDimension::Texture2D:
+        print(", float2({}, {})", instr.offsetX * 0.5f, instr.offsetY * 0.5f);
+        break;
+    case TextureDimension::TextureCube:
+        out += ", cubeMapData";
+        break;
+    }
+
+    out += ").";
+
+    printDstSwizzle(instr.dstSwizzle, true);
+
+    out += ";\n";
+
+    printDstSwizzle01(instr.dstRegister, instr.dstSwizzle);
+
+#ifdef REBLUE_RECOMP
+    if (hasShadowTexture)
+    {
+        for (size_t i = 0; i < 4; i++)
+        {
+            if (getDestSwizzle(instr.dstSwizzle, i) <= FetchDestinationSwizzle::One)
+                shadowTapSlots.erase(uint32_t(instr.dstRegister * 4 + i));
+        }
+        if (shadowTap)
+        {
+            for (size_t i = 0; i < 4; i++)
+            {
+                if (getDestSwizzle(instr.dstSwizzle, i) == FetchDestinationSwizzle::X)
+                    shadowTapSlots[uint32_t(instr.dstRegister * 4 + i)] = shadowTapUVCount;
+            }
+            ++shadowTapUVCount;
+        }
+    }
+#endif
+
+    if (instr.isPredicated)
+    {
+        --indentation;
+        indent();
+        out += "}\n";
+    }
+}
+
+void ShaderRecompiler::recompile(const AluInstruction& instr)
+{
+    if (instr.isPredicated)
+    {
+        indent();
+        println("if ({}p0)", instr.predicateCondition ? "" : "!");
+
+        indent(); 
+        out += "{\n";
+        ++indentation;
+    }
+
+    enum
+    {
+        VECTOR_0,
+        VECTOR_1,
+        VECTOR_2,
+        SCALAR_0,
+        SCALAR_1,
+        SCALAR_CONSTANT_0,
+        SCALAR_CONSTANT_1
+    };
+
+    auto op = [&](size_t operand)
+        {
+            size_t reg = 0;
+            size_t swizzle = 0;
+            bool select = true;
+            bool negate = false;
+            bool abs = false;
+
+            switch (operand)
+            {
+            case SCALAR_CONSTANT_0:
+                reg = instr.src3Register;
+                swizzle = instr.src3Swizzle;
+                select = false;
+                negate = instr.src3Negate;
+                abs = instr.absConstants;
+                break;
+
+            case SCALAR_CONSTANT_1:
+                reg = (uint32_t(instr.scalarOpcode) & 1) | (instr.src3Select << 1) | (instr.src3Swizzle & 0x3C);
+                swizzle = instr.src3Swizzle;
+                select = true;
+                negate = instr.src3Negate;
+                abs = instr.absConstants;
+                break;
+
+            default:
+                switch (operand)
+                {
+                case VECTOR_0:
+                    reg = instr.src1Register;
+                    swizzle = instr.src1Swizzle;
+                    select = instr.src1Select;
+                    negate = instr.src1Negate;
+                    break;
+                case VECTOR_1:
+                    reg = instr.src2Register;
+                    swizzle = instr.src2Swizzle;
+                    select = instr.src2Select;
+                    negate = instr.src2Negate;
+                    break;
+                case VECTOR_2:
+                case SCALAR_0:
+                case SCALAR_1:
+                    reg = instr.src3Register;
+                    swizzle = instr.src3Swizzle;
+                    select = instr.src3Select;
+                    negate = instr.src3Negate;
+                    break;
+                }
+
+                if (select)
+                {
+                    abs = (reg & 0x80) != 0;
+                    reg &= 0x3F;
+                }
+                else
+                {
+                    abs = instr.absConstants;
+                }
+
+                break;
+            }
+
+            std::string regFormatted;
+
+#ifdef CONAN_RECOMP
+            bool constRelative = false;
+            if (!select)
+            {
+                // ucode.h AluInstruction::src_const_is_addressed(): operand 1 -> const_0_rel;
+                // operand 2 -> const_0_rel if src1 is a temp, else const_1_rel; operand 3
+                // (incl. the mulsc/addsc/subsc constant) -> const_0_rel if src1 and src2
+                // are temps, else const_1_rel.
+                if (operand == VECTOR_0)
+                    constRelative = instr.const0Relative;
+                else if (operand == VECTOR_1)
+                    constRelative = instr.src1Select ? instr.const0Relative : instr.const1Relative;
+                else
+                    constRelative = (instr.src1Select && instr.src2Select) ? instr.const0Relative : instr.const1Relative;
+            }
+            if (constRelative)
+            {
+                regFormatted = fmt::format("CONST_REL({} + {})", reg, instr.constAddressRegisterRelative ? "a0" : "aL");
+            }
+            else
+#endif
+            if (select)
+            {
+                regFormatted = fmt::format("r{}", reg);
+            }
+            else
+            {
+                auto findResult = float4Constants.find(reg);
+                if (findResult != float4Constants.end())
+                {
+                    const char* constantName = reinterpret_cast<const char*>(constantTableData + findResult->second->name);
+                    if (findResult->second->registerCount > 1)
+                    {
+                    #ifdef UNLEASHED_RECOMP
+                        if (hasMtxProjection && strcmp(constantName, "g_MtxProjection") == 0)
+                        {
+                            regFormatted = fmt::format("(iterationIndex == 0 ? mtxProjectionReverseZ[{0}] : mtxProjection[{0}])",
+                                reg - findResult->second->registerIndex);
+                        }
+                        else
+                    #endif
+                        {
+                            regFormatted = fmt::format("{}({}{})", constantName,
+                                reg - findResult->second->registerIndex, LEGACY_CONST_REL(instr) ? (instr.constAddressRegisterRelative ? " + a0" : " + aL") : "");
+                        }
+                    }
+                    else
+                    {
+                        assert(!LEGACY_CONST_REL_ANY(instr));
+                        regFormatted = constantName;
+                    }
+                }
+                else
+                {
+                    assert(!LEGACY_CONST_REL_ANY(instr));
+                    regFormatted = fmt::format("c{}", reg);
+                }
+            }
+
+            std::string result;
+
+            if (negate)
+                result += '-';
+
+            if (abs)
+                result += "abs(";
+
+            result += regFormatted;
+            result += '.';
+
+            switch (operand)
+            {
+            case VECTOR_0:
+            case VECTOR_1:
+            case VECTOR_2:
+            {
+                uint32_t mask;
+
+                switch (instr.vectorOpcode)
+                {
+                case AluVectorOpcode::Dp2Add:
+                    mask = (operand == VECTOR_2) ? 0b1 : 0b11;
+                    break;
+
+                case AluVectorOpcode::Dp3:
+                    mask = 0b111;
+                    break;
+
+                case AluVectorOpcode::Dp4:
+                case AluVectorOpcode::Max4:
+                    mask = 0b1111;
+                    break;
+
+                default:
+                    mask = instr.vectorWriteMask != 0 ? instr.vectorWriteMask : 0b1;
+                    break;
+                }
+
+                for (size_t i = 0; i < 4; i++)
+                {
+                    if ((mask >> i) & 0x1)
+                        result += SWIZZLES[((swizzle >> (i * 2)) + i) & 0x3];
+                }
+
+                break;
+            }
+
+            case SCALAR_0:
+            case SCALAR_CONSTANT_0:
+                result += SWIZZLES[((swizzle >> 6) + 3) & 0x3];
+                break;
+
+            case SCALAR_1:
+            case SCALAR_CONSTANT_1:
+                result += SWIZZLES[swizzle & 0x3];
+                break;
+            }
+
+            if (abs)
+                result += ")";
+
+            return result;
+        };
+
+    switch (instr.vectorOpcode)
+    {
+    case AluVectorOpcode::KillEq:
+        indent();
+        println("clip(any({} == {}) ? -1 : 1);", op(VECTOR_0), op(VECTOR_1));
+        break;
+    
+    case AluVectorOpcode::KillGt:
+        indent();
+        println("clip(any({} > {}) ? -1 : 1);", op(VECTOR_0), op(VECTOR_1));
+        break;
+    
+    case AluVectorOpcode::KillGe:
+        indent();
+        println("clip(any({} >= {}) ? -1 : 1);", op(VECTOR_0), op(VECTOR_1));
+        break;
+    
+    case AluVectorOpcode::KillNe:
+        indent();
+        println("clip(any({} != {}) ? -1 : 1);", op(VECTOR_0), op(VECTOR_1));
+        break;
+    }
+
+    bool closeIfBracket = false;
+
+    std::string_view exportRegister;
+    if (instr.exportData)
+    {
+        if (isPixelShader)
+        {
+            switch (ExportRegister(instr.vectorDest))
+            {
+            case ExportRegister::PSColor0:
+                exportRegister = "oC0";
+                break;        
+            case ExportRegister::PSColor1:
+                exportRegister = "oC1";
+                break;        
+            case ExportRegister::PSColor2:
+                exportRegister = "oC2";
+                break;            
+            case ExportRegister::PSColor3:
+                exportRegister = "oC3";
+                break;           
+            case ExportRegister::PSDepth:
+                exportRegister = "oDepth";
+                break;
+            }
+        }
+        else
+        {
+            switch (ExportRegister(instr.vectorDest))
+            {
+            case ExportRegister::VSPosition:
+                exportRegister = "oPos";
+
+            #ifdef UNLEASHED_RECOMP
+                if (hasMtxProjection)
+                {
+                    indent();
+                    out += "if ((g_SpecConstants() & SPEC_CONSTANT_REVERSE_Z) == 0 || iterationIndex == 0)\n";
+                    indent();
+                    out += "{\n";
+                    ++indentation;
+
+                    closeIfBracket = true;
+                }
+            #endif
+
+                break;
+
+            default:
+            {
+                auto findResult = interpolators.find(instr.vectorDest);
+                assert(findResult != interpolators.end());
+                exportRegister = findResult->second;
+                break;
+            }
+            }
+        }
+    }
+
+    if (instr.vectorOpcode >= AluVectorOpcode::SetpEqPush && instr.vectorOpcode <= AluVectorOpcode::SetpGePush)
+    {
+        indent();
+        print("p0 = {} == 0.0 && {} ", op(VECTOR_0), op(VECTOR_1));
+
+        switch (instr.vectorOpcode)
+        {
+        case AluVectorOpcode::SetpEqPush:
+            out += "==";
+            break;
+        case AluVectorOpcode::SetpNePush:
+            out += "!=";
+            break;
+        case AluVectorOpcode::SetpGtPush:
+            out += ">";
+            break;
+        case AluVectorOpcode::SetpGePush:
+            out += ">=";
+            break;
+        }
+
+        out += " 0.0;\n";
+    }
+    else if (instr.vectorOpcode >= AluVectorOpcode::MaxA)
+    {
+        indent();
+        println("a0 = (int)clamp(floor(({}).w + 0.5), -256.0, 255.0);", op(VECTOR_0));
+    }
+
+    uint32_t vectorWriteMask = instr.vectorWriteMask;
+    if (instr.exportData)
+        vectorWriteMask &= ~instr.scalarWriteMask;
+
+#ifdef REBLUE_RECOMP
+    // A Sgt/Sge whose sources are ShadowTexture taps re-emits per lane as a
+    // filtered compare from the stashed tap UV, turning the guest's binary PCF
+    // into hardware-equivalent bilinear PCF. Anything else falls through.
+    bool shadowCmpRewritten = false;
+    if (vectorWriteMask != 0 && !instr.exportData && hasShadowTexture &&
+        (instr.vectorOpcode == AluVectorOpcode::Sgt || instr.vectorOpcode == AluVectorOpcode::Sge) &&
+        instr.src1Select && !instr.src1Negate && (instr.src1Register & 0x80) == 0 &&
+        instr.src2Select && !instr.src2Negate && (instr.src2Register & 0x80) == 0)
+    {
+        const uint32_t srcA = instr.src1Register & 0x3F;
+        const uint32_t srcB = instr.src2Register & 0x3F;
+        bool allTaps = instr.vectorDest != srcA && instr.vectorDest != srcB;
+        for (size_t i = 0; i < 4 && allTaps; i++)
+        {
+            if ((vectorWriteMask >> i) & 0x1)
+                allTaps = shadowTapSlots.find(srcA * 4 + (((instr.src1Swizzle >> (i * 2)) + i) & 0x3)) != shadowTapSlots.end();
+        }
+        if (allTaps)
+        {
+            for (size_t i = 0; i < 4; i++)
+            {
+                if (((vectorWriteMask >> i) & 0x1) == 0)
+                    continue;
+                const uint32_t compA = ((instr.src1Swizzle >> (i * 2)) + i) & 0x3;
+                const uint32_t compB = ((instr.src2Swizzle >> (i * 2)) + i) & 0x3;
+                indent();
+                println("r{}.{} = shadowCmp2D(ShadowTexture_Texture2DDescriptorIndex, shadowTapUV[{}], r{}.{});",
+                    instr.vectorDest, SWIZZLES[i], shadowTapSlots[srcA * 4 + compA], srcB, SWIZZLES[compB]);
+            }
+            shadowCmpRewritten = true;
+        }
+    }
+
+    if (vectorWriteMask != 0 && !shadowCmpRewritten)
+#else
+    if (vectorWriteMask != 0)
+#endif
+    {
+        indent();
+        if (!exportRegister.empty())
+        {
+            out += exportRegister;
+            out += '.';
+        }
+        else
+        {
+            print("r{}.", instr.vectorDest);
+        }
+
+        for (size_t i = 0; i < 4; i++)
+        {
+            if ((vectorWriteMask >> i) & 0x1)
+                out += SWIZZLES[i];
+        }
+
+        out += " = ";
+
+        if (instr.vectorSaturate)
+            out += "saturate(";
+
+        switch (instr.vectorOpcode)
+        {
+        case AluVectorOpcode::Add:
+            print("{} + {}", op(VECTOR_0), op(VECTOR_1));
+            break;
+
+        case AluVectorOpcode::Mul:
+            print("{} * {}", op(VECTOR_0), op(VECTOR_1));
+            break;
+
+        case AluVectorOpcode::Max:
+        case AluVectorOpcode::MaxA:
+            print("max({}, {})", op(VECTOR_0), op(VECTOR_1));
+            break;
+
+        case AluVectorOpcode::Min:
+            print("min({}, {})", op(VECTOR_0), op(VECTOR_1));
+            break;
+
+        case AluVectorOpcode::Seq:
+            print("{} == {}", op(VECTOR_0), op(VECTOR_1));
+            break;
+
+        case AluVectorOpcode::Sgt:
+            print("{} > {}", op(VECTOR_0), op(VECTOR_1));
+            break;
+
+        case AluVectorOpcode::Sge:
+            print("{} >= {}", op(VECTOR_0), op(VECTOR_1));
+            break;
+
+        case AluVectorOpcode::Sne:
+            print("{} != {}", op(VECTOR_0), op(VECTOR_1));
+            break;
+
+        case AluVectorOpcode::Frc:
+            print("frac({})", op(VECTOR_0));
+            break;
+
+        case AluVectorOpcode::Trunc:
+            print("trunc({})", op(VECTOR_0));
+            break;
+
+        case AluVectorOpcode::Floor:
+            print("floor({})", op(VECTOR_0));
+            break;
+
+        case AluVectorOpcode::Mad:
+            print("{} * {} + {}", op(VECTOR_0), op(VECTOR_1), op(VECTOR_2));
+            break;
+
+        case AluVectorOpcode::CndEq:
+            print("select({} == 0.0, {}, {})", op(VECTOR_0), op(VECTOR_1), op(VECTOR_2));
+            break;
+
+        case AluVectorOpcode::CndGe:
+            print("select({} >= 0.0, {}, {})", op(VECTOR_0), op(VECTOR_1), op(VECTOR_2));
+            break;
+
+        case AluVectorOpcode::CndGt:
+            print("select({} > 0.0, {}, {})", op(VECTOR_0), op(VECTOR_1), op(VECTOR_2));
+            break;
+
+        case AluVectorOpcode::Dp4:
+        case AluVectorOpcode::Dp3:
+            print("dot({}, {})", op(VECTOR_0), op(VECTOR_1));
+            break;
+
+        case AluVectorOpcode::Dp2Add:
+            print("dot({}, {}) + {}", op(VECTOR_0), op(VECTOR_1), op(VECTOR_2));
+            break;
+
+        case AluVectorOpcode::Cube:
+        {
+            // Xenos cube takes the direction from src1's swizzled lanes (z, w, x);
+            // the canonical emit is src.zzxy which makes this src.xyz, but other
+            // compilers emit e.g. src.yyzx (Blue Dragon), so honor the swizzle.
+            const uint32_t reg = instr.src1Register & 0x3F;
+            const bool srcAbs = (instr.src1Register & 0x80) != 0;
+            auto lane = [&](uint32_t i) { return SWIZZLES[((instr.src1Swizzle >> (i * 2)) + i) & 0x3]; };
+            print("cube({}{}r{}.{}{}{}{}{}, cubeMapData)",
+                instr.src1Negate ? "-" : "", srcAbs ? "abs(" : "", reg,
+                lane(2), lane(3), lane(0), lane(0), srcAbs ? ")" : "");
+            break;
+        }
+
+        case AluVectorOpcode::Max4:
+            print("max4({})", op(VECTOR_0));
+            break;
+
+        case AluVectorOpcode::SetpEqPush:
+        case AluVectorOpcode::SetpNePush:
+        case AluVectorOpcode::SetpGtPush:
+        case AluVectorOpcode::SetpGePush:
+            print("p0 ? 0.0 : {} + 1.0", op(VECTOR_0));
+            break;
+
+        case AluVectorOpcode::KillEq:
+            print("any({} == {})", op(VECTOR_0), op(VECTOR_1));
+            break;
+
+        case AluVectorOpcode::KillGt:
+            print("any({} > {})", op(VECTOR_0), op(VECTOR_1));
+            break;
+
+        case AluVectorOpcode::KillGe:
+            print("any({} >= {})", op(VECTOR_0), op(VECTOR_1));
+            break;
+
+        case AluVectorOpcode::KillNe:
+            print("any({} != {})", op(VECTOR_0), op(VECTOR_1));
+            break;
+
+        case AluVectorOpcode::Dst:
+            print("dst({}, {})", op(VECTOR_0), op(VECTOR_1));
+            break;
+        }
+
+        if (instr.vectorSaturate)
+            out += ')';
+
+        out += ";\n";
+    }
+
+#ifdef REBLUE_RECOMP
+    if (hasShadowTexture && vectorWriteMask != 0 && exportRegister.empty())
+    {
+        for (size_t i = 0; i < 4; i++)
+        {
+            if ((vectorWriteMask >> i) & 0x1)
+                shadowTapSlots.erase(uint32_t(instr.vectorDest * 4 + i));
+        }
+    }
+#endif
+
+    if (instr.scalarOpcode != AluScalarOpcode::RetainPrev)
+    {
+        if (instr.scalarOpcode >= AluScalarOpcode::SetpEq && instr.scalarOpcode <= AluScalarOpcode::SetpRstr)
+        {
+            indent();
+            out += "p0 = ";
+
+            switch (instr.scalarOpcode)
+            {
+            case AluScalarOpcode::SetpEq:
+                print("{} == 0.0", op(SCALAR_0));
+                break;
+
+            case AluScalarOpcode::SetpNe:
+                print("{} != 0.0", op(SCALAR_0));
+                break;
+
+            case AluScalarOpcode::SetpGt:
+                print("{} > 0.0", op(SCALAR_0));
+                break;
+
+            case AluScalarOpcode::SetpGe:
+                print("{} >= 0.0", op(SCALAR_0));
+                break;
+
+            case AluScalarOpcode::SetpInv:
+                print("{} == 1.0", op(SCALAR_0));
+                break;
+
+            case AluScalarOpcode::SetpPop:
+                print("{} - 1.0 <= 0.0", op(SCALAR_0));
+                break;
+
+            case AluScalarOpcode::SetpClr:
+                out += "false";
+                break;
+
+            case AluScalarOpcode::SetpRstr:
+                print("{} == 0.0", op(SCALAR_0));
+                break;
+            }
+
+            out += ";\n";
+        }
+
+        indent();
+        out += "ps = ";
+        if (instr.scalarSaturate)
+            out += "saturate(";
+
+        switch (instr.scalarOpcode)
+        {
+        case AluScalarOpcode::Adds:
+            print("{} + {}", op(SCALAR_0), op(SCALAR_1));
+            break;
+
+        case AluScalarOpcode::AddsPrev:
+            print("{} + ps", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::Muls:
+            print("{} * {}", op(SCALAR_0), op(SCALAR_1));
+            break;
+
+        case AluScalarOpcode::MulsPrev:
+        case AluScalarOpcode::MulsPrev2:
+            print("{} * ps", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::Maxs:
+        case AluScalarOpcode::MaxAs:
+        case AluScalarOpcode::MaxAsf:
+            print("max({}, {})", op(SCALAR_0), op(SCALAR_1));
+            break;
+
+        case AluScalarOpcode::Mins:
+            print("min({}, {})", op(SCALAR_0), op(SCALAR_1));
+            break;
+
+        case AluScalarOpcode::Seqs:
+            print("{} == 0.0", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::Sgts:
+            print("{} > 0.0", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::Sges:
+            print("{} >= 0.0", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::Snes:
+            print("{} != 0.0", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::Frcs:
+            print("frac({})", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::Truncs:
+            print("trunc({})", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::Floors:
+            print("floor({})", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::Exp:
+            print("exp2({})", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::Logc:
+        case AluScalarOpcode::Log:
+            print("clamp(log2({}), FLT_MIN, FLT_MAX)", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::Rcpc:
+        case AluScalarOpcode::Rcpf:
+        case AluScalarOpcode::Rcp:
+            print("clamp(rcp({}), FLT_MIN, FLT_MAX)", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::Rsqc:
+        case AluScalarOpcode::Rsqf:
+        case AluScalarOpcode::Rsq:
+            print("clamp(rsqrt({}), FLT_MIN, FLT_MAX)", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::Subs:
+            print("{} - {}", op(SCALAR_0), op(SCALAR_1));
+            break;
+
+        case AluScalarOpcode::SubsPrev:
+            print("{} - ps", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::SetpEq:
+        case AluScalarOpcode::SetpNe:
+        case AluScalarOpcode::SetpGt:
+        case AluScalarOpcode::SetpGe:
+            out += "p0 ? 0.0 : 1.0";
+            break;
+
+        case AluScalarOpcode::SetpInv:
+#if defined(REBLUE_RECOMP) || defined(CONAN_RECOMP)
+            // PRED_SETINV: src==1 -> 0, src==0 -> 1, else passthrough.
+            print("{0} == 1.0 ? 0.0 : ({0} == 0.0 ? 1.0 : {0})", op(SCALAR_0));
+#else
+            print("{0} == 0.0 ? 1.0 : {0}", op(SCALAR_0));
+#endif
+            break;
+
+        case AluScalarOpcode::SetpPop:
+            print("p0 ? 0.0 : ({} - 1.0)", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::SetpClr:
+            out += "FLT_MAX";
+            break;
+
+        case AluScalarOpcode::SetpRstr:
+            print("p0 ? 0.0 : {}", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::KillsEq:
+            print("{} == 0.0", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::KillsGt:
+            print("{} > 0.0", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::KillsGe:
+            print("{} >= 0.0", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::KillsNe:
+            print("{} != 0.0", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::KillsOne:
+            print("{} == 1.0", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::Sqrt:
+            print("sqrt({})", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::Mulsc0:
+        case AluScalarOpcode::Mulsc1:
+            print("{} * {}", op(SCALAR_CONSTANT_0), op(SCALAR_CONSTANT_1));
+            break;
+
+        case AluScalarOpcode::Addsc0:
+        case AluScalarOpcode::Addsc1:
+            print("{} + {}", op(SCALAR_CONSTANT_0), op(SCALAR_CONSTANT_1));
+            break;
+
+        case AluScalarOpcode::Subsc0:
+        case AluScalarOpcode::Subsc1:
+            print("{} - {}", op(SCALAR_CONSTANT_0), op(SCALAR_CONSTANT_1));
+            break;
+
+        case AluScalarOpcode::Sin:
+            print("sin({})", op(SCALAR_0));
+            break;
+
+        case AluScalarOpcode::Cos:
+            print("cos({})", op(SCALAR_0));
+            break;
+        }
+
+        if (instr.scalarSaturate)
+            out += ')';
+
+        out += ";\n";
+
+        switch (instr.scalarOpcode)
+        {
+        case AluScalarOpcode::MaxAs:
+            indent();
+            println("a0 = (int)clamp(floor({} + 0.5), -256.0, 255.0);", op(SCALAR_0));
+            break;     
+        case AluScalarOpcode::MaxAsf:
+            indent();
+            println("a0 = (int)clamp(floor({}), -256.0, 255.0);", op(SCALAR_0));
+            break;
+        }
+    }
+
+    uint32_t scalarWriteMask = instr.scalarWriteMask;
+    if (instr.exportData)
+        scalarWriteMask &= ~instr.vectorWriteMask;
+
+    if (scalarWriteMask != 0)
+    {
+        indent();
+        if (!exportRegister.empty())
+        {
+            out += exportRegister;
+            out += '.';
+        }
+        else
+        {
+            print("r{}.", instr.scalarDest);
+        }
+
+        for (size_t i = 0; i < 4; i++)
+        {
+            if ((scalarWriteMask >> i) & 0x1)
+                out += SWIZZLES[i];
+        }
+
+        out += " = ps;\n";
+    }
+
+#ifdef REBLUE_RECOMP
+    if (hasShadowTexture && scalarWriteMask != 0 && exportRegister.empty())
+    {
+        for (size_t i = 0; i < 4; i++)
+        {
+            if ((scalarWriteMask >> i) & 0x1)
+                shadowTapSlots.erase(uint32_t(instr.scalarDest * 4 + i));
+        }
+    }
+#endif
+
+    if (instr.exportData)
+    {
+        uint32_t zeroMask = instr.scalarDestRelative ? (0b1111 & ~(instr.vectorWriteMask | instr.scalarWriteMask)) : 0;
+        uint32_t oneMask = instr.vectorWriteMask & instr.scalarWriteMask;
+
+        for (size_t i = 0; i < 4; i++)
+        {
+            uint32_t mask = 1 << i;
+            if (zeroMask & mask)
+            {
+                indent();
+                println("{}.{} = 0.0;", exportRegister, SWIZZLES[i]);
+            }
+            else if (oneMask & mask)
+            {
+                indent();
+                println("{}.{} = 1.0;", exportRegister, SWIZZLES[i]);
+            }
+        }
+    }
+
+    if (instr.scalarOpcode >= AluScalarOpcode::KillsEq && instr.scalarOpcode <= AluScalarOpcode::KillsOne)
+    {
+        indent();
+        out += "clip(ps != 0.0 ? -1 : 1);\n";
+    }
+
+    if (closeIfBracket)
+    {
+        --indentation;
+        indent();
+        out += "}\n";
+    }
+
+    if (instr.isPredicated)
+    {
+        --indentation;
+        indent();
+        out += "}\n";
+    }
+}
+
+void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_view& include)
+{
+    const auto shaderContainer = reinterpret_cast<const ShaderContainer*>(shaderData);
+
+    assert((shaderContainer->flags & 0xFFFFFF00) == 0x102A1100);
+    assert(shaderContainer->constantTableOffset != NULL);
+
+    out += include;
+    out += '\n';
+
+    isPixelShader = (shaderContainer->flags & 0x1) == 0;
+
+    const auto constantTableContainer = reinterpret_cast<const ConstantTableContainer*>(shaderData + shaderContainer->constantTableOffset);
+    constantTableData = reinterpret_cast<const uint8_t*>(&constantTableContainer->constantTable);
+
+    out += "#ifdef __spirv__\n\n";
+
+#ifdef UNLEASHED_RECOMP
+    bool isMetaInstancer = false;
+    bool hasIndexCount = false;
+#endif
+
+    for (uint32_t i = 0; i < constantTableContainer->constantTable.constants; i++)
+    {
+        const auto constantInfo = reinterpret_cast<const ConstantInfo*>(
+            constantTableData + constantTableContainer->constantTable.constantInfo + i * sizeof(ConstantInfo));
+
+        const char* constantName = reinterpret_cast<const char*>(constantTableData + constantInfo->name);
+
+#ifdef REBLUE_RECOMP
+        if (isPixelShader && constantInfo->registerSet == RegisterSet::Sampler &&
+            strcmp(constantName, "ShadowTexture") == 0)
+        {
+            hasShadowTexture = true;
+        }
+#endif
+
+    #ifdef UNLEASHED_RECOMP
+        if (!isPixelShader)
+        {
+            if (strcmp(constantName, "g_MtxProjection") == 0)
+                hasMtxProjection = true;
+            else if (strcmp(constantName, "g_InstanceTypes") == 0)
+                isMetaInstancer = true;
+            else if (strcmp(constantName, "g_IndexCount") == 0)
+                hasIndexCount = true;
+        }
+        else
+        {
+            if (strcmp(constantName, "g_MtxPrevInvViewProjection") == 0)
+                hasMtxPrevInvViewProjection = true;
+        }
+    #endif
+
+        switch (constantInfo->registerSet)
+        {
+        case RegisterSet::Float4:
+        {
+            const char* shaderName = isPixelShader ? "Pixel" : "Vertex";
+
+            if (constantInfo->registerCount > 1)
+            {
+                uint32_t tailCount = (isPixelShader ? PS_FLOAT_CONSTANT_COUNT : 256) - constantInfo->registerIndex;
+
+                println("#define {}(INDEX) select((INDEX) < {}, vk::RawBufferLoad<float4>(g_PushConstants.{}ShaderConstants + ({} + min(INDEX, {})) * 16, 0x10), 0.0)",
+                    constantName, tailCount, shaderName, constantInfo->registerIndex.get(), tailCount - 1);
+            }
+            else
+            {
+                println("#define {} vk::RawBufferLoad<float4>(g_PushConstants.{}ShaderConstants + {}, 0x10)",
+                    constantName, shaderName, constantInfo->registerIndex * 16);
+            }
+            
+#ifdef REBLUE_RECOMP
+            // BD aliases a singleton constant over an array slot; the wider registrant wins so body and cbuffer agree.
+            for (uint16_t j = 0; j < constantInfo->registerCount; j++)
+            {
+                uint32_t reg = constantInfo->registerIndex + j;
+                auto it = float4Constants.find(reg);
+                if (it == float4Constants.end() || it->second->registerCount < constantInfo->registerCount)
+                    float4Constants[reg] = constantInfo;
+            }
+#else
+            for (uint16_t j = 0; j < constantInfo->registerCount; j++)
+                float4Constants.emplace(constantInfo->registerIndex + j, constantInfo);
+#endif
+
+            break;
+        }
+
+        case RegisterSet::Sampler:
+        {
+            for (size_t j = 0; j < std::size(TEXTURE_DIMENSIONS); j++)
+            {
+                println("#define {}_Texture{}DescriptorIndex vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + {})",
+                    constantName, TEXTURE_DIMENSIONS[j], j * 64 + constantInfo->registerIndex * 4);
+            }
+
+            println("#define {}_SamplerDescriptorIndex vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + {})",
+                constantName, std::size(TEXTURE_DIMENSIONS) * 64 + constantInfo->registerIndex * 4);
+
+            samplers.emplace(constantInfo->registerIndex, constantName);
+            break;
+        }
+
+        }
+    }
+
+#ifdef REBLUE_RECOMP
+    // BD bodies reference unnamed sampler slots; emit fallback descriptor-index defines for any slot 0..15 the table didn't name.
+    for (uint32_t r = 0; r < 16; r++)
+    {
+        if (samplers.find(r) != samplers.end())
+            continue;
+        for (size_t j = 0; j < std::size(TEXTURE_DIMENSIONS); j++)
+        {
+            println("#define s{}_Texture{}DescriptorIndex vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + {})",
+                r, TEXTURE_DIMENSIONS[j], j * 64 + r * 4);
+        }
+        println("#define s{}_SamplerDescriptorIndex vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + {})",
+            r, std::size(TEXTURE_DIMENSIONS) * 64 + r * 4);
+    }
+#endif
+
+#ifdef CONAN_RECOMP
+    println("#define CONST_REL(INDEX) select((uint)(INDEX) < 256, vk::RawBufferLoad<float4>(g_PushConstants.{}ShaderConstants + min((uint)(INDEX), 255) * 16, 0x10), 0.0)",
+        isPixelShader ? "Pixel" : "Vertex");
+#endif
+
+    out += "\n#else\n\n";
+
+#ifdef CONAN_RECOMP
+    // The whole 256-entry float constant file is one array so relative
+    // addressing (a0/aL) can reach any register, named or not, and aliased
+    // constant-table entries never overlap in the cbuffer.
+    {
+        const char* stageName = isPixelShader ? "Pixel" : "Vertex";
+        println("cbuffer {}ShaderConstants : register(b{}, space4)", stageName, isPixelShader ? 1 : 0);
+        out += "{\n";
+        println("\tfloat4 g_{}ShaderConstantsArr[256] : packoffset(c0);", stageName);
+        out += "};\n\n";
+        println("#define CONST_REL(INDEX) select((uint)(INDEX) < 256, g_{}ShaderConstantsArr[min((uint)(INDEX), 255)], 0.0)", stageName);
+        for (uint32_t i = 0; i < constantTableContainer->constantTable.constants; i++)
+        {
+            const auto constantInfo = reinterpret_cast<const ConstantInfo*>(
+                constantTableData + constantTableContainer->constantTable.constantInfo + i * sizeof(ConstantInfo));
+            if (constantInfo->registerSet != RegisterSet::Float4)
+                continue;
+            const char* constantName = reinterpret_cast<const char*>(constantTableData + constantInfo->name);
+            if (constantInfo->registerCount > 1)
+                println("#define {}(INDEX) CONST_REL({} + (INDEX))", constantName, constantInfo->registerIndex.get());
+            else
+                println("#define {} g_{}ShaderConstantsArr[{}]", constantName, stageName, constantInfo->registerIndex.get());
+        }
+        out += "\n";
+    }
+#else
+    println("cbuffer {}ShaderConstants : register(b{}, space4)", isPixelShader ? "Pixel" : "Vertex", isPixelShader ? 1 : 0);
+    out += "{\n";
+
+    for (uint32_t i = 0; i < constantTableContainer->constantTable.constants; i++)
+    {
+        const auto constantInfo = reinterpret_cast<const ConstantInfo*>(
+            constantTableData + constantTableContainer->constantTable.constantInfo + i * sizeof(ConstantInfo));
+
+        if (constantInfo->registerSet == RegisterSet::Float4)
+        {
+#ifdef REBLUE_RECOMP
+            // Only the alias winner gets a packoffset slot; a loser would overlap it in the cbuffer and fail DXC.
+            auto winner = float4Constants.find(constantInfo->registerIndex);
+            if (winner == float4Constants.end() || winner->second != constantInfo)
+                continue;
+#endif
+
+            const char* constantName = reinterpret_cast<const char*>(constantTableData + constantInfo->name);
+
+            print("\tfloat4 {}", constantName);
+
+            if (constantInfo->registerCount > 1)
+                print("[{}]", constantInfo->registerCount.get());
+
+            println(" : packoffset(c{});", constantInfo->registerIndex.get());
+
+            if (constantInfo->registerCount > 1)
+            {
+                uint32_t tailCount = (isPixelShader ? PS_FLOAT_CONSTANT_COUNT : 256) - constantInfo->registerIndex;
+                println("#define {0}(INDEX) select((INDEX) < {1}, {0}[min(INDEX, {2})], 0.0)", constantName, tailCount, tailCount - 1);
+            }
+        }
+    }
+
+    out += "};\n\n";
+#endif
+
+    out += "cbuffer SharedConstants : register(b2, space4)\n";
+    out += "{\n";
+
+    for (uint32_t i = 0; i < constantTableContainer->constantTable.constants; i++)
+    {
+        const auto constantInfo = reinterpret_cast<const ConstantInfo*>(
+            constantTableData + constantTableContainer->constantTable.constantInfo + i * sizeof(ConstantInfo));
+
+        if (constantInfo->registerSet == RegisterSet::Sampler)
+        {
+            const char* constantName = reinterpret_cast<const char*>(constantTableData + constantInfo->name);
+
+            for (size_t j = 0; j < std::size(TEXTURE_DIMENSIONS); j++)
+            {
+                println("\tuint {}_Texture{}DescriptorIndex : packoffset(c{}.{});",
+                    constantName, TEXTURE_DIMENSIONS[j], j * 4 + constantInfo->registerIndex / 4, SWIZZLES[constantInfo->registerIndex % 4]);
+            }
+
+            println("\tuint {}_SamplerDescriptorIndex : packoffset(c{}.{});",
+                constantName, 4 * std::size(TEXTURE_DIMENSIONS) + constantInfo->registerIndex / 4, SWIZZLES[constantInfo->registerIndex % 4]);
+        }
+    }
+
+#ifdef REBLUE_RECOMP
+    // Mirror the SPIR-V fallback: packoffset slots for any unnamed sampler index 0..15.
+    for (uint32_t r = 0; r < 16; r++)
+    {
+        if (samplers.find(r) != samplers.end())
+            continue;
+        for (size_t j = 0; j < std::size(TEXTURE_DIMENSIONS); j++)
+        {
+            println("\tuint s{}_Texture{}DescriptorIndex : packoffset(c{}.{});",
+                r, TEXTURE_DIMENSIONS[j], j * 4 + r / 4, SWIZZLES[r % 4]);
+        }
+        println("\tuint s{}_SamplerDescriptorIndex : packoffset(c{}.{});",
+            r, 4 * std::size(TEXTURE_DIMENSIONS) + r / 4, SWIZZLES[r % 4]);
+    }
+#endif
+
+    out += "\tDEFINE_SHARED_CONSTANTS();\n";
+    out += "};\n\n";
+
+    out += "#endif\n";
+
+    for (uint32_t i = 0; i < constantTableContainer->constantTable.constants; i++)
+    {
+        const auto constantInfo = reinterpret_cast<const ConstantInfo*>(
+            constantTableData + constantTableContainer->constantTable.constantInfo + i * sizeof(ConstantInfo));
+
+        if (constantInfo->registerSet == RegisterSet::Bool)
+        {
+            const char* constantName = reinterpret_cast<const char*>(constantTableData + constantInfo->name);
+#if defined(REBLUE_RECOMP) || defined(CONAN_RECOMP)
+            // Key named bools by the unified VS(0..127)/PS(128..255) bit so CF tests (also unified) resolve them.
+            const uint32_t unifiedBit = uint32_t(constantInfo->registerIndex) + (isPixelShader ? 128u : 0u);
+            println("\t#define {} BOOL_BIT({})", constantName, unifiedBit);
+            boolConstants.emplace(unifiedBit, constantName);
+#else
+            println("\t#define {} (1 << {})", constantName, constantInfo->registerIndex + (isPixelShader ? 16 : 0));
+            boolConstants.emplace(constantInfo->registerIndex, constantName);
+#endif
+        }
+    }
+
+    out += '\n';
+
+    const auto shader = reinterpret_cast<const Shader*>(shaderData + shaderContainer->shaderOffset);
+
+    out += "#ifndef __spirv__\n";
+
+    if (isPixelShader)
+        out += "[shader(\"pixel\")]\n";
+    else
+        out += "[shader(\"vertex\")]\n";
+
+    out += "#endif\n";
+
+    out += "void main(\n";
+
+    if (isPixelShader)
+    {
+        out += "\tin float4 iPos : SV_Position,\n";
+
+        for (auto& [usage, usageIndex] : INTERPOLATORS)
+        {
+#ifdef REBLUE_RECOMP
+            const char* interpolation = (usage == DeclUsage::Color) ? "centroid " : "";
+#else
+            const char* interpolation = "";
+#endif
+            println("\tin {3}float4 i{0}{1} : {2}{1},", USAGE_VARIABLES[uint32_t(usage)], usageIndex, USAGE_SEMANTICS[uint32_t(usage)], interpolation);
+        }
+
+        out += "#ifdef __spirv__\n";
+        out += "\tin bool iFace : SV_IsFrontFace\n";
+        out += "#else\n";
+        out += "\tin uint iFace : SV_IsFrontFace\n";
+        out += "#endif\n";
+
+        auto pixelShader = reinterpret_cast<const PixelShader*>(shader);
+        if (pixelShader->outputs & PIXEL_SHADER_OUTPUT_COLOR0)
+            out += ",\n\tout float4 oC0 : SV_Target0";
+        if (pixelShader->outputs & PIXEL_SHADER_OUTPUT_COLOR1)
+            out += ",\n\tout float4 oC1 : SV_Target1";
+        if (pixelShader->outputs & PIXEL_SHADER_OUTPUT_COLOR2)
+            out += ",\n\tout float4 oC2 : SV_Target2";
+        if (pixelShader->outputs & PIXEL_SHADER_OUTPUT_COLOR3)
+            out += ",\n\tout float4 oC3 : SV_Target3";
+        if (pixelShader->outputs & PIXEL_SHADER_OUTPUT_DEPTH)
+            out += ",\n\tout float oDepth : SV_Depth";
+    }
+    else
+    {
+        auto vertexShader = reinterpret_cast<const VertexShader*>(shader);
+        for (uint32_t i = 0; i < vertexShader->vertexElementCount; i++)
+        {
+            union
+            {
+                VertexElement vertexElement;
+                uint32_t value;
+            };
+
+            value = vertexShader->vertexElementsAndInterpolators[vertexShader->field18 + i];
+
+            const char* usageType = USAGE_TYPES[uint32_t(vertexElement.usage)];
+
+        #ifdef UNLEASHED_RECOMP
+            if ((vertexElement.usage == DeclUsage::TexCoord && vertexElement.usageIndex == 2 && isMetaInstancer) ||
+                (vertexElement.usage == DeclUsage::Position && vertexElement.usageIndex == 1))
+            {
+                usageType = "uint4";
+            }
+        #endif
+
+            out += '\t';
+
+            bool locatedInput = false;
+            for (auto& usageLocation : USAGE_LOCATIONS)
+            {
+                if (usageLocation.usage == vertexElement.usage && usageLocation.usageIndex == vertexElement.usageIndex)
+                {
+                    print("[[vk::location({})]] ", usageLocation.location);
+                    locatedInput = true;
+                    break;
+                }
+            }
+            assert(locatedInput);
+
+            println("in {0} i{1}{2} : {3}{2},", usageType, USAGE_VARIABLES[uint32_t(vertexElement.usage)],
+                uint32_t(vertexElement.usageIndex), USAGE_SEMANTICS[uint32_t(vertexElement.usage)]);
+
+            vertexElements.emplace(uint32_t(vertexElement.address), vertexElement);
+        }
+
+    #ifdef UNLEASHED_RECOMP
+        if (hasIndexCount)
+        {
+            out += "\tin uint iVertexId : SV_VertexID,\n";
+            out += "\tin uint iInstanceId : SV_InstanceID,\n";
+        }
+    #endif
+
+        out += "\tout precise float4 oPos : SV_Position";
+
+        for (auto& [usage, usageIndex] : INTERPOLATORS)
+            print(",\n\tout float4 o{0}{1} : {2}{1}", USAGE_VARIABLES[uint32_t(usage)], usageIndex, USAGE_SEMANTICS[uint32_t(usage)]);
+    }
+
+    out += ")\n";
+    out += "{\n";
+
+#ifdef UNLEASHED_RECOMP
+    if (hasMtxProjection)
+    {
+        specConstantsMask |= SPEC_CONSTANT_REVERSE_Z;
+
+        out += "\toPos = 0.0;\n";
+
+        out += "\tfloat4x4 mtxProjection = float4x4(g_MtxProjection(0), g_MtxProjection(1), g_MtxProjection(2), g_MtxProjection(3));\n";
+        out += "\tfloat4x4 mtxProjectionReverseZ = mul(mtxProjection, float4x4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 1, 1));\n";
+
+        out += "\t[unroll] for (int iterationIndex = 0; iterationIndex < 2; iterationIndex++)\n";
+        out += "\t{\n";
+    }
+#endif
+
+#ifdef CONAN_RECOMP
+    bool hasShadowAtlas = false;
+    std::vector<uint32_t> atlasPcfRegs;  // literal registers holding PCF tap offsets
+    for (auto& [reg, name] : samplers)
+        hasShadowAtlas |= strcmp(name, "g_ShadowMapTextureAtlas") == 0;
+#endif
+    if (shaderContainer->definitionTableOffset != NULL)
+    {
+        auto definitionTable = reinterpret_cast<const DefinitionTable*>(shaderData + shaderContainer->definitionTableOffset);
+        auto definitions = definitionTable->definitions;
+        while (*definitions != 0)
+        {
+            auto definition = reinterpret_cast<const Float4Definition*>(definitions);
+            auto value = reinterpret_cast<const be<uint32_t>*>(shaderData + shaderContainer->virtualSize + definition->physicalOffset);
+            for (uint16_t i = 0; i < (definition->count + 3) / 4; i++)
+            {
+#ifdef REBLUE_RECOMP
+                // BD bakes the sun-shadow receiver PCF tap offsets as shader
+                // literals in 1/1024-of-the-map UV units, folded into 0.5+k
+                // and 1.0+k anchors plus the raw 1/1024 frac-stagger stride.
+                // Their world footprint scales with the shadow coverage box
+                // (bd_shadow_distance), so re-anchor each such component on
+                // g_ShadowPcfScale (SharedConstants c20.z, byte 328, =
+                // max(1/distance, 1024/dimension)). Bit-exact identity at
+                // scale 1.0. Gated to pixel shaders sampling ShadowTexture;
+                // the +/-3/1024 window (anchors excluded) matches exactly the
+                // kernel literals across every BD receiver and nothing else.
+                auto shadowKernelComponent = [&](uint32_t u) -> std::string
+                {
+                    if (hasShadowTexture)
+                    {
+                        if (u == 0x3A800000)
+                            return fmt::format("(asfloat(0x{:X}u) * g_ShadowPcfScale)", u);
+                        float f;
+                        memcpy(&f, &u, sizeof(f));
+                        for (float anchor : { 0.5f, 1.0f })
+                        {
+                            float d = f > anchor ? f - anchor : anchor - f;
+                            if (f != anchor && d <= 3.0f / 1024.0f)
+                                return fmt::format("({} + (asfloat(0x{:X}u) - {}) * g_ShadowPcfScale)", anchor, u, anchor);
+                        }
+                    }
+                    return fmt::format("asfloat(0x{:X}u)", u);
+                };
+                println("\tfloat4 c{} = float4({}, {}, {}, {});",
+                    definition->registerIndex + i - (isPixelShader ? 256 : 0),
+                    shadowKernelComponent(value[0].get()), shadowKernelComponent(value[1].get()),
+                    shadowKernelComponent(value[2].get()), shadowKernelComponent(value[3].get()));
+#elif defined(CONAN_RECOMP)
+                // Conan: the shadow-atlas receivers (sampler g_ShadowMapTextureAtlas)
+                // bake their rotated-grid PCF tap-center offsets as literals in
+                // 4096-texel atlas UV units (+-0.25..1.5 / 4096). With the atlas
+                // rendered at shadow_quality x, scale them by g_ShadowAtlasTexelScale
+                // (SharedConstants c28.z = 1 / scale) so the whole kernel (centers +
+                // bilinear taps, which use the host texel grid for this texture)
+                // keeps its shape at the finer resolution. Identity at scale 1.
+                bool atlasPcfOffsets = false;
+                if (isPixelShader && hasShadowAtlas)
+                {
+                    bool anyNonZero = false, allKernel = true;
+                    for (int c = 0; c < 4; c++)
+                    {
+                        uint32_t u = value[c].get();
+                        float f;
+                        memcpy(&f, &u, sizeof(f));
+                        float quarters = f * 4096.0f * 4.0f;
+                        if (f != 0.0f)
+                            anyNonZero = true;
+                        if (!(quarters >= -8.0f && quarters <= 8.0f) || quarters != float(int(quarters)))
+                            allKernel = false;
+                    }
+                    atlasPcfOffsets = anyNonZero && allKernel;
+                }
+                if (atlasPcfOffsets)
+                    atlasPcfRegs.push_back(definition->registerIndex + i - 256);
+                println("\tfloat4 c{} = asfloat(uint4(0x{:X}, 0x{:X}, 0x{:X}, 0x{:X})){};",
+                    definition->registerIndex + i - (isPixelShader ? 256 : 0), value[0].get(), value[1].get(), value[2].get(), value[3].get(),
+                    atlasPcfOffsets ? " * g_ShadowAtlasTexelScale" : "");
+#else
+                println("\tfloat4 c{} = asfloat(uint4(0x{:X}, 0x{:X}, 0x{:X}, 0x{:X}));",
+                    definition->registerIndex + i - (isPixelShader ? 256 : 0), value[0].get(), value[1].get(), value[2].get(), value[3].get());
+#endif
+
+                value += 4;
+            }
+            definitions += 2;
+        }
+        ++definitions;
+        while (*definitions != 0)
+        {
+            auto definition = reinterpret_cast<const Int4Definition*>(definitions);
+            for (uint16_t i = 0; i < definition->count; i++)
+            {
+                union
+                {
+                    uint32_t value;
+                    struct
+                    {
+                        int8_t x;
+                        int8_t y;
+                        int8_t z;
+                        int8_t w;
+                    };
+                };
+
+                value = definition->values[i].get();
+#ifdef CONAN_RECOMP
+                literalLoopConstants[(definition->registerIndex - 8992) / 4 + i] = value;
+#endif
+
+                println("\tint4 i{} = int4({}, {}, {}, {});",
+                    (definition->registerIndex - 8992) / 4 + i, x, y, z, w);
+            }
+            definitions += 2;
+            definitions += definition->count;
+        }
+
+        out += "\n";
+    }
+
+#ifdef CONAN_RECOMP
+    // Shadow smoothing (host option, SharedConstants c28.w g_ShadowSoftness):
+    // rotate the atlas PCF tap-center offsets by a per-pixel angle
+    // (interleaved gradient noise) and widen them by g_ShadowSoftness. The
+    // regular 2x2-bilinear staircase along shadow-map texels becomes a fine,
+    // stable grain; 0 = the game's fixed kernel.
+    if (!atlasPcfRegs.empty())
+    {
+        out += "\t[branch] if (g_ShadowSoftness > 0.0)\n\t{\n";
+        out += "\t\tfloat conanAngle = 6.2831853 * frac(52.9829189 * frac(dot(floor(iPos.xy), float2(0.06711056, 0.00583715))));\n";
+        out += "\t\tfloat2 conanCS = float2(cos(conanAngle), sin(conanAngle)) * g_ShadowSoftness;\n";
+        for (uint32_t reg : atlasPcfRegs)
+        {
+            println("\t\tc{0} = float4(c{0}.x * conanCS.x - c{0}.y * conanCS.y, c{0}.x * conanCS.y + c{0}.y * conanCS.x, "
+                    "c{0}.z * conanCS.x - c{0}.w * conanCS.y, c{0}.z * conanCS.y + c{0}.w * conanCS.x);", reg);
+        }
+        out += "\t}\n\n";
+    }
+#endif
+
+    bool printedRegisters[32]{};
+
+    uint32_t interpolatorCount = (shader->interpolatorInfo >> 5) & 0x1F;
+
+    for (uint32_t i = 0; i < interpolatorCount; i++)
+    {
+        union
+        {
+            Interpolator interpolator;
+            uint32_t value;
+        };
+    
+        if (isPixelShader)
+        {
+            value = reinterpret_cast<const PixelShader*>(shader)->interpolators[i];
+            println("\tfloat4 r{} = i{}{};", uint32_t(interpolator.reg), USAGE_VARIABLES[uint32_t(interpolator.usage)], uint32_t(interpolator.usageIndex));
+            printedRegisters[interpolator.reg] = true;
+        }
+        else
+        {
+            auto vertexShader = reinterpret_cast<const VertexShader*>(shader);
+            value = vertexShader->vertexElementsAndInterpolators[vertexShader->field18 + vertexShader->vertexElementCount + i];
+            interpolators.emplace(i, fmt::format("o{}{}", USAGE_VARIABLES[uint32_t(interpolator.usage)], uint32_t(interpolator.usageIndex)));
+        }
+    }
+
+    if (!isPixelShader)
+    {
+    #if defined(UNLEASHED_RECOMP)
+        if (!hasMtxProjection)
+            out += "\toPos = 0.0;\n";
+    #elif defined(REBLUE_RECOMP) || defined(CONAN_RECOMP)
+        // Always define SV_Position so a skipped position-write block doesn't leave it undef.
+        out += "\toPos = 0.0;\n";
+    #endif
+
+        for (auto& [usage, usageIndex] : INTERPOLATORS)
+            println("\to{}{} = 0.0;", USAGE_VARIABLES[uint32_t(usage)], usageIndex);
+
+        out += "\n";
+    }
+
+    for (size_t i = 0; i < 32; i++)
+    {
+        if (!printedRegisters[i])
+        {
+            print("\tfloat4 r{} = ", i);
+            if (isPixelShader && i == ((shader->fieldC >> 8) & 0xFF))
+            {
+                // Conan: render targets may be rendered at a multiple of the guest
+                // resolution; g_PixelPosScale (1 / scale) maps host pixels back to
+                // guest pixel coordinates.
+                out += "\n#ifdef CONAN_RECOMP\n\t\tfloat4((iPos.xy * g_PixelPosScale - 0.5) * float2(iFace ? 1.0 : -1.0, 1.0), 0.0, 0.0);\n#else\n";
+                out += "\t\tfloat4((iPos.xy - 0.5) * float2(iFace ? 1.0 : -1.0, 1.0), 0.0, 0.0);\n#endif\n";
+            }
+        #ifdef UNLEASHED_RECOMP
+            else if (!isPixelShader && hasIndexCount && i == 0)
+            {
+                out += "float4(iVertexId + g_IndexCount.x * iInstanceId, 0.0, 0.0, 0.0);\n";
+            }
+        #endif
+            else
+            {
+                out += "0.0;\n";
+            }
+        }
+    }
+
+    out += "\tint a0 = 0;\n";
+    out += "\tint aL = 0;\n";
+    out += "\tbool p0 = false;\n";
+    out += "\tfloat ps = 0.0;\n";
+    if (isPixelShader)
+    {
+#if defined(UNLEASHED_RECOMP) || defined(CONAN_RECOMP)
+        out += "\tfloat2 pixelCoord = 0.0;\n";
+#endif
+        out += "\tCubeMapData cubeMapData = (CubeMapData)0;\n";
+#ifdef REBLUE_RECOMP
+        if (hasShadowTexture)
+            out += "\tfloat2 shadowTapUV[8] = (float2[8])0;\n";
+#endif
+    }
+
+    const be<uint32_t>* code = reinterpret_cast<const be<uint32_t>*>(shaderData + shaderContainer->virtualSize + shader->physicalOffset);
+
+    union
+    {
+        ControlFlowInstruction controlFlow[2];
+        struct
+        {
+            uint32_t code0;
+            uint32_t code1;
+            uint32_t code2;
+            uint32_t code3;
+        };
+    };
+
+    auto controlFlowCode = code;
+    uint32_t instrAddress = 0;
+    uint32_t instrSize = shader->size;
+    bool simpleControlFlow = true;
+
+    // Per-instruction control flow summary for the structurizer below.
+    enum class CfKind : uint8_t { None, Cond, Uncond, LoopStart, LoopEnd };
+    struct CfSummary
+    {
+        CfKind kind = CfKind::None;
+        uint32_t target = 0;
+    };
+    std::vector<CfSummary> cfSummaries;
+    std::vector<uint32_t> loopStarts;
+    std::unordered_map<uint32_t, uint32_t> loopEndFor;
+    uint32_t cfIndex = 0;
+
+    while (instrAddress < instrSize)
+    {
+        code0 = controlFlowCode[0];
+        code1 = controlFlowCode[1] & 0xFFFF;
+        code2 = (controlFlowCode[1] >> 16) | (controlFlowCode[2] << 16);
+        code3 = controlFlowCode[2] >> 16;
+
+        for (auto& cfInstr : controlFlow)
+        {
+            uint32_t address = 0;
+
+            switch (cfInstr.opcode)
+            {
+            case ControlFlowOpcode::Exec:
+            case ControlFlowOpcode::ExecEnd:
+                address = cfInstr.exec.address;
+                break;
+
+            case ControlFlowOpcode::CondExec:
+            case ControlFlowOpcode::CondExecEnd:
+            case ControlFlowOpcode::CondExecPredClean:
+            case ControlFlowOpcode::CondExecPredCleanEnd:
+                address = cfInstr.condExec.address;
+                break;
+
+            case ControlFlowOpcode::CondExecPred:
+            case ControlFlowOpcode::CondExecPredEnd:
+                address = cfInstr.condExecPred.address;
+                break;
+
+            case ControlFlowOpcode::LoopStart:
+                loopStarts.push_back(cfIndex);
+                cfSummaries.push_back({ CfKind::LoopStart, 0 });
+                break;
+
+            case ControlFlowOpcode::LoopEnd:
+                if (loopStarts.empty())
+                    simpleControlFlow = false;
+                else
+                {
+                    loopEndFor[loopStarts.back()] = cfIndex;
+                    loopStarts.pop_back();
+                }
+                cfSummaries.push_back({ CfKind::LoopEnd, 0 });
+                break;
+
+            case ControlFlowOpcode::CondJmp:
+            {
+                if (cfInstr.condJmp.direction || cfInstr.condJmp.address <= cfIndex)
+                    simpleControlFlow = false;
+
+                cfSummaries.push_back({
+                    cfInstr.condJmp.isUnconditional ? CfKind::Uncond : CfKind::Cond,
+                    uint32_t(cfInstr.condJmp.address) });
+                break;
+            }
+            }
+
+            if (cfSummaries.size() == cfIndex)
+                cfSummaries.push_back({});
+
+            if (address != 0)
+                instrSize = std::min<uint32_t>(instrSize, address * 12);
+
+            ++cfIndex;
+        }
+
+        controlFlowCode += 3;
+        instrAddress += 12;
+    }
+
+    if (!loopStarts.empty())
+        simpleControlFlow = false;
+
+    if (simpleControlFlow)
+    {
+        // Recursive-descent structurizer. Xenos control flow in practice is
+        // structured code lowered to forward jumps: "cjmp c, ELSE; then;
+        // jmp MERGE; ELSE: else" diamonds where the compiler may retarget the
+        // then-exit jump at an ENCLOSING merge point (jump chaining), plus
+        // LoopStart/LoopEnd pairs. structure() walks a region [lo, hi) with
+        // the continuation index "cont" (where control flows after hi): a
+        // trailing unconditional jump to the continuation is a no-op after
+        // structuring, a conditional jump opens an if (with an else branch
+        // when the instruction before its target is an unconditional jump to
+        // a legal merge point). Any other shape rejects the shader back to
+        // the switch(pc) state machine.
+        const uint32_t instrCount = (instrSize / 12) * 2;
+        if (cfSummaries.size() > instrCount)
+            cfSummaries.resize(instrCount);
+
+        std::function<bool(uint32_t, uint32_t, uint32_t)> structure =
+            [&](uint32_t lo, uint32_t hi, uint32_t cont) -> bool
+        {
+            uint32_t i = lo;
+            while (i < hi)
+            {
+                const CfSummary& summary = cfSummaries[i];
+                switch (summary.kind)
+                {
+                case CfKind::Uncond:
+                {
+                    if (i + 1 == hi && (summary.target == cont || summary.target == hi))
+                        i = hi;
+                    else
+                        return false;
+                    break;
+                }
+                case CfKind::Cond:
+                {
+                    const uint32_t t = summary.target;
+                    if (t > hi)
+                    {
+                        if (t != cont)
+                            return false;
+                        ++ifEndLabels[hi];
+                        if (!structure(i + 1, hi, cont))
+                            return false;
+                        i = hi;
+                    }
+                    // A then-exit jump targeting the cond target itself is a
+                    // no-op (empty else); fall through to the plain-if path,
+                    // whose trailing-jump rule deletes it.
+                    else if (t < hi && t - 1 > i && cfSummaries[t - 1].kind == CfKind::Uncond &&
+                             cfSummaries[t - 1].target != t)
+                    {
+                        const uint32_t merge = cfSummaries[t - 1].target;
+                        if (merge == cont || merge == hi)
+                        {
+                            elseLabels.insert(t);
+                            ++ifEndLabels[hi];
+                            if (!structure(i + 1, t - 1, merge == cont ? cont : hi))
+                                return false;
+                            if (!structure(t, hi, cont))
+                                return false;
+                            i = hi;
+                        }
+                        else if (merge < hi)
+                        {
+                            elseLabels.insert(t);
+                            ++ifEndLabels[merge];
+                            if (!structure(i + 1, t - 1, merge))
+                                return false;
+                            if (!structure(t, merge, merge))
+                                return false;
+                            i = merge;
+                        }
+                        else
+                        {
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        ++ifEndLabels[t];
+                        if (!structure(i + 1, t, t == hi ? cont : t))
+                            return false;
+                        i = t;
+                    }
+                    break;
+                }
+                case CfKind::LoopStart:
+                {
+                    auto loopEnd = loopEndFor.find(i);
+                    if (loopEnd == loopEndFor.end() || loopEnd->second >= hi)
+                        return false;
+                    if (!structure(i + 1, loopEnd->second, loopEnd->second))
+                        return false;
+                    i = loopEnd->second + 1;
+                    break;
+                }
+                case CfKind::LoopEnd:
+                    return false; // reached without its LoopStart
+
+                default:
+                    ++i;
+                    break;
+                }
+            }
+            return true;
+        };
+
+        simpleControlFlow = structure(0, instrCount, instrCount);
+    }
+
+    if (!simpleControlFlow)
+    {
+        ifEndLabels.clear();
+        elseLabels.clear();
+    }
+
+    if (simpleControlFlow)
+    {
+        out += '\n';
+        indentation = 1;
+    }
+    else
+    {
+        out += "\n\tuint pc = 0;\n";
+        out += "\twhile (true)\n";
+        out += "\t{\n";
+        out += "\t\tswitch (pc)\n";
+        out += "\t\t{\n";
+    }
+
+    controlFlowCode = code;
+    instrAddress = 0;
+    uint32_t pc = 0;
+
+    while (instrAddress < instrSize)
+    {
+        code0 = controlFlowCode[0];
+        code1 = controlFlowCode[1] & 0xFFFF;
+        code2 = (controlFlowCode[1] >> 16) | (controlFlowCode[2] << 16);
+        code3 = controlFlowCode[2] >> 16;
+
+        for (auto& cfInstr : controlFlow)
+        {
+            if (!simpleControlFlow)
+            {
+                indentation = 3;
+                println("\t\tcase {}:", pc);
+            }
+            else
+            {
+                auto findResult = ifEndLabels.find(pc);
+                if (findResult != ifEndLabels.end())
+                {
+                    for (uint32_t i = 0; i < findResult->second; i++)
+                    {
+                        --indentation;
+                        indent();
+                        out += "}\n";
+                    }
+                }
+                // Inner regions close first (validated nesting), then the
+                // enclosing if's then-branch flips to its else-branch.
+                if (elseLabels.count(pc) != 0)
+                {
+                    --indentation;
+                    indent();
+                    out += "}\n";
+                    indent();
+                    out += "else\n";
+                    indent();
+                    out += "{\n";
+                    ++indentation;
+                }
+            }
+
+            ++pc;
+
+            uint32_t address = 0;
+            uint32_t count = 0;
+            uint32_t sequence = 0;
+            bool shouldReturn = false;
+            bool shouldCloseCurlyBracket = false;
+
+            switch (cfInstr.opcode)
+            {
+            case ControlFlowOpcode::Exec:
+            case ControlFlowOpcode::ExecEnd:
+                address = cfInstr.exec.address;
+                count = cfInstr.exec.count;
+                sequence = cfInstr.exec.sequence;
+                shouldReturn = (cfInstr.opcode == ControlFlowOpcode::ExecEnd);
+                break;
+
+            case ControlFlowOpcode::CondExec:
+            case ControlFlowOpcode::CondExecEnd:
+            case ControlFlowOpcode::CondExecPredClean:
+            case ControlFlowOpcode::CondExecPredCleanEnd:
+                address = cfInstr.condExec.address;
+                count = cfInstr.condExec.count;
+                sequence = cfInstr.condExec.sequence;
+#if defined(REBLUE_RECOMP) || defined(CONAN_RECOMP)
+                shouldReturn = (cfInstr.opcode == ControlFlowOpcode::CondExecEnd ||
+                                cfInstr.opcode == ControlFlowOpcode::CondExecPredCleanEnd);
+                // Gate the block on its boolean constant (Xenos cexec bN / cexec !bN); baseline ran it unconditionally.
+                {
+                    indent();
+                    auto findResult = boolConstants.find(cfInstr.condExec.boolAddress);
+                    if (findResult != boolConstants.end())
+                        println("if ({}{})", cfInstr.condExec.condition ? "" : "!", findResult->second);
+                    else
+                        println("if ({}BOOL_BIT({}))", cfInstr.condExec.condition ? "" : "!", uint32_t(cfInstr.condExec.boolAddress));
+                    indent();
+                    out += "{\n";
+                    ++indentation;
+                    shouldCloseCurlyBracket = true;
+                }
+#else
+                shouldReturn = (cfInstr.opcode == ControlFlowOpcode::CondExecEnd || cfInstr.opcode == ControlFlowOpcode::CondExecEnd);
+#endif
+                break;
+
+            case ControlFlowOpcode::CondExecPred:
+            case ControlFlowOpcode::CondExecPredEnd:
+                address = cfInstr.condExecPred.address;
+                count = cfInstr.condExecPred.count;
+                sequence = cfInstr.condExecPred.sequence;
+                shouldReturn = (cfInstr.opcode == ControlFlowOpcode::CondExecPredEnd);
+                break;
+
+            case ControlFlowOpcode::LoopStart:
+                if (simpleControlFlow)
+                {
+                    indent();
+                #ifdef CONAN_RECOMP
+                    // xenos::LoopConstant semantics: count iterations, aL = start + i * step,
+                    // aL restored after the loop (loop stack).
+                    const uint32_t loopIndex = loopCounter++;
+                    loopStack.push_back(loopIndex);
+                    println("int aLSave{} = aL;", loopIndex);
+                    indent();
+                    println("uint loopConst{} = {};", loopIndex, loopConstantExpr(cfInstr.loopStart.loopId));
+                    indent();
+                    println("[loop] for (uint loopIt{0} = 0; loopIt{0} < LOOP_COUNT(loopConst{0}); loopIt{0}++)", loopIndex);
+                    indent();
+                    out += "{\n";
+                    ++indentation;
+                    indent();
+                    println("aL = LOOP_START(loopConst{0}) + int(loopIt{0}) * LOOP_STEP(loopConst{0});", loopIndex);
+                #else
+                #ifdef UNLEASHED_RECOMP
+                    print("[unroll] ");
+                #endif
+                    println("for (aL = 0; aL < i{}.x; aL++)", uint32_t(cfInstr.loopStart.loopId));
+                    indent();
+                    out += "{\n";
+                    ++indentation;
+                #endif
+                }
+                else 
+                {
+                #ifdef CONAN_RECOMP
+                    // Unstructured (switch(pc)) loops: single-level only; aL doubles as the
+                    // iterator base. Flagged by the catalog (structured=0 + loop).
+                    println("\t\t\taL = LOOP_START({});", loopConstantExpr(cfInstr.loopStart.loopId));
+                #else
+                    out += "\t\t\taL = 0;\n";
+                #endif
+                }
+                break;
+
+            case ControlFlowOpcode::LoopEnd:
+                if (simpleControlFlow)
+                {
+                #ifdef CONAN_RECOMP
+                    if (cfInstr.loopEnd.isPredicatedBreak)
+                    {
+                        indent();
+                        println("if ({}p0) break;", cfInstr.loopEnd.condition ? "" : "!");
+                    }
+                #endif
+                    --indentation;
+                    indent();
+                    out += "}\n";
+                #ifdef CONAN_RECOMP
+                    indent();
+                    println("aL = aLSave{};", loopStack.back());
+                    loopStack.pop_back();
+                #endif
+                }
+                else
+                {
+                #ifdef CONAN_RECOMP
+                    println("\t\t\taL += LOOP_STEP({});", loopConstantExpr(cfInstr.loopEnd.loopId));
+                    println("\t\t\tif (uint((aL - LOOP_START({0})) / max(LOOP_STEP({0}), 1)) < LOOP_COUNT({0}){1})", loopConstantExpr(cfInstr.loopEnd.loopId),
+                        cfInstr.loopEnd.isPredicatedBreak ? (cfInstr.loopEnd.condition ? " && !p0" : " && p0") : "");
+                #else
+                    out += "\t\t\t++aL;\n";
+                    println("\t\t\tif (aL < i{}.x)", uint32_t(cfInstr.loopEnd.loopId));
+                #endif
+                    out += "\t\t\t{\n";
+                    println("\t\t\t\tpc = {};", uint32_t(cfInstr.loopEnd.address));
+                    out += "\t\t\t\tcontinue;\n";
+                    out += "\t\t\t}\n";
+                }
+                break;
+
+            case ControlFlowOpcode::CondJmp:
+            {
+                if (cfInstr.condJmp.isUnconditional)
+                {
+                    // Structured mode: the then-branch exit jump was consumed by
+                    // the "} else {" emitted at the next instruction.
+                    if (!simpleControlFlow)
+                    {
+                        println("\t\t\tpc = {};", uint32_t(cfInstr.condJmp.address));
+                        out += "\t\t\tcontinue;\n";
+                    }
+                }
+                else
+                {
+                    indent();
+                    if (cfInstr.condJmp.isPredicated)
+                    {
+                        println("if ({}p0)", cfInstr.condJmp.condition ^ simpleControlFlow ? "" : "!");
+                    }
+                    else
+                    {
+#if defined(REBLUE_RECOMP) || defined(CONAN_RECOMP)
+                        // Bools expand to BOOL_BIT(N) expressions; negate when the jump fires on a clear bit.
+                        const bool jumpIfSet = cfInstr.condJmp.condition ^ simpleControlFlow;
+                        auto findResult = boolConstants.find(cfInstr.condJmp.boolAddress);
+                        if (findResult != boolConstants.end())
+                            println("if ({}{})", jumpIfSet ? "" : "!", findResult->second);
+                        else
+                            println("if ({}BOOL_BIT({}))", jumpIfSet ? "" : "!", uint32_t(cfInstr.condJmp.boolAddress));
+#else
+                        auto findResult = boolConstants.find(cfInstr.condJmp.boolAddress);
+                        if (findResult != boolConstants.end())
+                            println("if ((g_Booleans & {}) {}= 0)", findResult->second, cfInstr.condJmp.condition ^ simpleControlFlow ? "!" : "=");
+                        else
+                            println("if (b{} {}= 0)", uint32_t(cfInstr.condJmp.boolAddress), cfInstr.condJmp.condition ^ simpleControlFlow ? "!" : "=");
+#endif
+                    }
+
+                    if (simpleControlFlow)
+                    {
+                        indent();
+                        out += "{\n";
+                        ++indentation;
+                    }
+                    else
+                    {
+                        out += "\t\t\t{\n";
+                        println("\t\t\t\tpc = {};", uint32_t(cfInstr.condJmp.address));
+                        out += "\t\t\t\tcontinue;\n";
+                        out += "\t\t\t}\n";
+                    }
+                }
+                break;
+            }
+            }
+
+            auto instructionCode = code + address * 3;
+            
+            for (uint32_t i = 0; i < count; i++)
+            {
+                union
+                {
+                    VertexFetchInstruction vertexFetch;
+                    TextureFetchInstruction textureFetch;
+                    AluInstruction alu;
+                    struct
+                    {
+                        uint32_t code0;
+                        uint32_t code1;
+                        uint32_t code2;
+                    };
+                };
+            
+                code0 = instructionCode[0];
+                code1 = instructionCode[1];
+                code2 = instructionCode[2];
+            
+                if ((sequence & 0x1) != 0)
+                {
+                    if (vertexFetch.opcode == FetchOpcode::VertexFetch)
+                    {
+                        recompile(vertexFetch, address + i);
+                    }
+                    else
+                    {
+                    #ifdef UNLEASHED_RECOMP
+                        if (textureFetch.constIndex == 10) // g_GISampler
+                        {
+                            specConstantsMask |= SPEC_CONSTANT_BICUBIC_GI_FILTER;
+
+                            indent();
+                            out += "if (g_SpecConstants() & SPEC_CONSTANT_BICUBIC_GI_FILTER)";
+                            indent();
+                            out += '{';
+
+                            ++indentation;
+                            recompile(textureFetch, true);
+                            --indentation;
+
+                            indent();
+                            out += "}";
+                            indent();
+                            out += "else";
+                            indent();
+                            out += '{';
+
+                            ++indentation;
+                            recompile(textureFetch, false);
+                            --indentation;
+
+                            indent();
+                            out += '}';
+                        }
+                        else
+                    #endif
+                        {
+                            recompile(textureFetch, false);
+                        }
+                    }
+                }
+                else
+                {
+                    recompile(alu);
+                }
+            
+                sequence >>= 2;
+                instructionCode += 3;
+            }
+
+            if (shouldReturn)
+            {
+                if (isPixelShader)
+                {
+                #ifdef CONAN_RECOMP
+                    // Soft particles (host option): fade blended effects near
+                    // the scene surface behind them, from the resolved scene
+                    // depth. View depth w: 1 / w = z * g_SoftParticleW.x +
+                    // g_SoftParticleW.y (the w column of the game's inverse
+                    // view-projection). Bit 4 fades rgba (premultiplied /
+                    // additive blends), bit 5 alpha only (SRC_ALPHA blends).
+                    indent();
+                    out += "[branch] if (g_SpecConstants() & (SPEC_CONSTANT_SOFT_PARTICLE_RGBA | SPEC_CONSTANT_SOFT_PARTICLE_ALPHA))";
+                    indent();
+                    out += '{';
+                    indent();
+                    out += "\tfloat conanSceneZ = g_Texture2DDescriptorHeap[g_SoftParticleDepth].Load(int3(iPos.xy * g_SoftParticleTexelScale, 0)).x;\n";
+                    indent();
+                    out += "\tfloat conanFade = saturate((rcp(conanSceneZ * g_SoftParticleW.x + g_SoftParticleW.y) - rcp(iPos.z * g_SoftParticleW.x + g_SoftParticleW.y)) / g_SoftParticleDistance);\n";
+                    indent();
+                    out += "\tif (g_SpecConstants() & SPEC_CONSTANT_SOFT_PARTICLE_RGBA) oC0 *= conanFade; else oC0.w *= conanFade;\n";
+                    indent();
+                    out += '}';
+                #endif
+                    specConstantsMask |= SPEC_CONSTANT_ALPHA_TEST;
+
+                    indent();
+                    out += "[branch] if (g_SpecConstants() & SPEC_CONSTANT_ALPHA_TEST)";
+                    indent();
+                    out += '{';
+
+                    indent();
+                    out += "\tclip(oC0.w - g_AlphaThreshold);\n";
+
+                    indent();
+                    out += "}";
+
+                #if defined(UNLEASHED_RECOMP) || defined(CONAN_RECOMP)
+                    specConstantsMask |= SPEC_CONSTANT_ALPHA_TO_COVERAGE;
+
+                    indent();
+                    out += "else if (g_SpecConstants() & SPEC_CONSTANT_ALPHA_TO_COVERAGE)";
+                    indent();
+                    out += '{';
+
+                    indent();
+                    out += "\toC0.w *= 1.0 + computeMipLevel(pixelCoord) * 0.25;\n";
+                    indent();
+                    out += "\toC0.w = 0.5 + (oC0.w - g_AlphaThreshold) / max(fwidth(oC0.w), 1e-6);\n";
+
+                    indent();
+                    out += '}';
+                #endif
+                }
+                else
+                {
+                #ifdef UNLEASHED_RECOMP
+                    if (!hasMtxProjection)
+                #endif
+                    {
+                        // Conan: screen-space draws (PA_CL_VTE_CNTL without viewport
+                        // scale) are mapped to NDC by the host through g_ScreenXform.
+                        out += "#ifdef CONAN_RECOMP\n\toPos.xy = oPos.xy * g_ScreenXform.xy + g_ScreenXform.zw * oPos.w;\n#endif\n";
+                        out += "\toPos.xy += g_HalfPixelOffset * oPos.w;\n";
+                    }
+                }
+
+                if (simpleControlFlow)
+                {
+                    indent();
+                #ifdef UNLEASHED_RECOMP
+                    if (hasMtxProjection)
+                    {
+                        out += "continue;\n";
+                    }
+                    else
+                #endif
+                    {
+                        out += "return;\n";
+                    }
+                }
+                else
+                {
+                    out += "\t\t\tbreak;\n";
+                }
+            }
+
+            if (shouldCloseCurlyBracket)
+            {
+                --indentation;
+                indent();
+                out += "}\n";
+            }
+        }
+
+        controlFlowCode += 3;
+        instrAddress += 12;
+    }
+
+    if (!simpleControlFlow)
+    {
+        out += "\t\t\tbreak;\n";
+        out += "\t\t}\n";
+        out += "\t\tbreak;\n";
+        out += "\t}\n";
+    }
+    else
+    {
+        // Regions closing one past the last instruction never get visited by
+        // the loop above; balance their braces here.
+        auto findResult = ifEndLabels.find(pc);
+        if (findResult != ifEndLabels.end())
+        {
+            for (uint32_t i = 0; i < findResult->second; i++)
+            {
+                --indentation;
+                indent();
+                out += "}\n";
+            }
+        }
+    }
+
+#ifdef UNLEASHED_RECOMP
+    if (hasMtxProjection)
+        out += "\t}\n";
+
+    if (!isPixelShader && hasMtxProjection)
+        out += "\toPos.xy += g_HalfPixelOffset * oPos.w;\n";
+#endif
+
+    out += "}";
+}

@@ -3,9 +3,10 @@
 One command: `bash tools/shaders/build_corpus.sh` (~40 s for ~600 shaders).
 
 1. Fetch DXC (tools/dxc) if missing.
-2. `tools/xenosrecomp/fetch_source.sh`: pinned zolaware/reblue-XenosRecomp @339af41
-   (offline mirror `_research/upstream/reblue-XenosRecomp` when present, else cloned from GitHub) +
-   `tools/xenosrecomp/patches/0001-conan-recomp.patch`; build `XenosRecompCorpus`
+2. Build `XenosRecompCorpus` from `tools/xenosrecomp/src`, vendored in git = pinned
+   zolaware/reblue-XenosRecomp @339af41 + `tools/xenosrecomp/patches/0001-conan-recomp.patch`
+   (to change the patch: edit `patches/`, then `tools/xenosrecomp/fetch_source.sh` re-vendors
+   `src/` from the pin, using `_research/upstream/reblue-XenosRecomp` when present)
    (CMake, clang; deps fmt/xxHash from the kit SDK).
 3. `extract_shaders.py`: byte-granular scan of every game file + the decoded default.xex
    (raw containers only: engines that compress their shader packages, e.g. UE3, need the
