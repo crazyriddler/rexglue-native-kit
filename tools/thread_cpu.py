@@ -1,14 +1,18 @@
 """Per-thread CPU usage (with thread names) of a running process.
-usage: thread_cpu.py <seconds> [process_name=<GAME_NAME>.exe] [top=16]
-Prints % of one core per thread over the interval and the process total."""
+usage: thread_cpu.py <seconds> [process_name=<GAME_NAME>.exe | pid] [top=16]
+Prints % of one core per thread over the interval and the process total.
+Only a process whose executable lies inside this kit folder is measured (the user may be
+running a release build with the same name); pass a PID to pick one explicitly."""
 import ctypes
+import os
 import ctypes.wintypes as wt
 import sys
 import time
 
 secs = float(sys.argv[1]) if len(sys.argv) > 1 else 10
-from kitcfg import EXE
+from kitcfg import EXE, ROOT
 pname = sys.argv[2] if len(sys.argv) > 2 else EXE
+explicit_pid = int(pname) if pname.isdigit() else None
 top = int(sys.argv[3]) if len(sys.argv) > 3 else 16
 k32 = ctypes.windll.kernel32
 
@@ -26,18 +30,37 @@ class PROCESSENTRY32W(ctypes.Structure):
                 ('pcPriClassBase', wt.LONG), ('dwFlags', wt.DWORD), ('szExeFile', wt.WCHAR * 260)]
 
 
+def image_path(pid):
+    h = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return ''
+    buf = ctypes.create_unicode_buffer(1024)
+    size = wt.DWORD(len(buf))
+    ok = k32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size))
+    k32.CloseHandle(h)
+    return buf.value if ok else ''
+
+
 def find_pid():
+    if explicit_pid is not None:
+        return explicit_pid
+    kit = os.path.normcase(os.path.abspath(ROOT))
     snap = k32.CreateToolhelp32Snapshot(2, 0)
     e = PROCESSENTRY32W()
     e.dwSize = ctypes.sizeof(e)
     ok = k32.Process32FirstW(snap, ctypes.byref(e))
+    mine, others = [], []
     while ok:
         if e.szExeFile.lower() == pname.lower():
-            k32.CloseHandle(snap)
-            return e.th32ProcessID
+            path = os.path.normcase(image_path(e.th32ProcessID))
+            (mine if path.startswith(kit) else others).append(e.th32ProcessID)
         ok = k32.Process32NextW(snap, ctypes.byref(e))
     k32.CloseHandle(snap)
-    return None
+    if others:
+        print(f'[thread_cpu] ignoring {pname} outside the kit (pids {others})', file=sys.stderr)
+    if len(mine) > 1:
+        sys.exit(f'[thread_cpu] several {pname} inside the kit (pids {mine}): pass the pid')
+    return mine[0] if mine else None
 
 
 def threads(pid):

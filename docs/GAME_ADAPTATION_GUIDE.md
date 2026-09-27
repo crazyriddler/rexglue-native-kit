@@ -11,7 +11,7 @@ new game while you are at it).
 1. Decoded image: `python scripts/port/xex_decode.py $PORT_DIR/game/default.xex $PORT_DIR/logs/default_image.bin`
    (basic compression only) or, after the first build, run the game with
    `--dump_xex_image=<file>` (any compression; kit SDK feature).
-2. Disassembly: `tools/binutils/powerpc-none-elf-objdump.exe -D -b binary -m powerpc -EB --adjust-vma=0x82000000 default_image.bin > $PORT_DIR/logs/default_full.dis`
+2. Disassembly: `tools/binutils/powerpc-none-elf-objdump.exe -D -b binary -m powerpc -EB --adjust-vma=0x82000000 $PORT_DIR/logs/default_image.bin > $PORT_DIR/logs/default_full.dis` (from the kit root; `tools/re/*.py` read this file)
 3. Signatures: `python tools/re/xdk_sigs.py match $PORT_DIR/logs/default_image.bin $PORT_DIR/generated/default/<game>_register.cpp -o artifacts/xdk_match.tsv`
    - `exact` = all masked instructions equal -> very likely the same XDK revision;
      still confirm the hook targets below in the disassembly.
@@ -67,6 +67,7 @@ signatures match exactly.
 | Game presents every 2nd vblank (vblank = 2 x fps) | native_graphics_system.cpp fps_limit | Measure: frame time at a known vblank rate |
 | Title ID 545107DA, shader container location (`shaders/shaders.stx`) | kit.env, corpus | Log line "Initializing shader storage for title"; `extract_shaders.py` scans every file |
 | Launcher strings/title, window title, cfg name, icon | launcher_dialog.cpp, settings.cpp, app header, .rc | Rename |
+| **File names the kit scripts expect** (must equal kit.env `GAME_NAME`): exe `<GAME_NAME>.exe` (CMake target), cfg `<GAME_NAME>.cfg` (`conan_app.h:83`), local PSO records `<GAME_NAME>_pipelines.bin` (`pipeline_cache.cpp:155`), cvar `write_default_settings` (settings.cpp) | bench/run.sh, tools/make_release.sh, tools/make_pipeline_base.sh | Rename `conan` -> GAME_NAME in all three; a mismatch makes make_pipeline_base.sh capture nothing and make_release.sh miss the exe/cfg |
 
 ## 3. Things that are generic (keep as is)
 

@@ -1,12 +1,15 @@
 """Samples the game process CPU usage and NVIDIA GPU power/utilization while a run is active.
-usage: power_probe.py <seconds> <start_delay_s> <out.txt>"""
+usage: power_probe.py <seconds> <start_delay_s> <out.txt>
+CPU: only <GAME_NAME> processes whose executable lies inside this kit folder (the user may be
+playing a release build at the same time). GPU power/utilization is the whole board's."""
 import subprocess, sys, time
-from kitcfg import GAME
+from kitcfg import GAME, ROOT
 secs, delay, out = float(sys.argv[1]), float(sys.argv[2]), sys.argv[3]
 time.sleep(delay)
 def cpu_seconds():
     r = subprocess.run(['powershell', '-NoProfile', '-Command',
-                        f'(Get-Process {GAME} -ErrorAction SilentlyContinue | Measure-Object -Property CPU -Sum).Sum'],
+                        f"(Get-Process {GAME} -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -like '{ROOT}*' }} "
+                        f"| Measure-Object -Property CPU -Sum).Sum"],
                        capture_output=True, text=True)
     try: return float(r.stdout.strip().replace(",", "."))
     except ValueError: return None

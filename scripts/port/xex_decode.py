@@ -84,6 +84,8 @@ def main():
 
     print(f"reconstructed image: {len(out)} bytes (image_size header says 0x{image_size:X})")
 
+    import os
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     with open(out_path, "wb") as f:
         f.write(out)
     print(f"wrote {out_path}")

@@ -42,19 +42,25 @@ _research/upstream/     disposable clones of other projects (gitignored)
    --config Release --target rexglue` -> `sdk/out/win-amd64/Release/rexglue.exe` (~5 min).
 5. `mkdir port && mv game port/game` (recreate `game/README.md`), then from `port/`:
    `../sdk/out/win-amd64/Release/rexglue.exe init --project-name $GAME_NAME --xex-path
-   game/default.xex --game-root game --project-root . [--scan-dll]`.
-6. Copy `docs/templates/*` to `docs/` and `docs/templates/error_log.md` to `port/docs/`.
+   game/default.xex --game-root game --project-root . [--scan-dll]`, then `mkdir -p logs`
+   (`port/logs/` holds images, disassembly and codegen logs). `--scan-dll` adds `.dll`
+   modules only; add any other module (e.g. an extra `.xex`) with
+   `rexglue.exe init module --project-root . --xex-path game/<m>.xex --guest-path "game:\<m>.xex"`.
+6. From the kit root: `cp docs/templates/* docs/ && mkdir -p port/docs && mv docs/error_log.md
+   port/docs/` (the error log belongs to the port).
    `git init` only if the kit is not already a repository; commit (game data is gitignored).
 7. Decoded image + disassembly: `python scripts/port/xex_decode.py port/game/default.xex
    port/logs/default_image.bin` (basic compression only; otherwise `--dump_xex_image` in
-   phase 2), then objdump (GAME_ADAPTATION_GUIDE §1).
+   phase 2), then the disassembly `port/logs/default_full.dis` (command in
+   GAME_ADAPTATION_GUIDE §1; `tools/re/*.py` read that file).
 
 **Decide**
 - Title update present -> choose base or TU **now** (switching later = new codegen). TU: put
   `default.xexp` next to `default.xex` in `port/game/`; the SDK applies it for codegen and
   runtime (log: "Loading XEX patch from"). Base revision: the TU may contain the developer's
   own fixes for timing bugs worth porting (ANY_GAME_CHECKLIST §1).
-- Extra modules -> `--scan-dll`; each module is its own codegen target.
+- Extra modules -> `--scan-dll` (.dll) / `init module` (other .xex); each module is its own
+  codegen target.
 - ISO/GOD dump -> extract to a folder first.
 
 **Exit**: kit.env filled; project initialized; state docs exist with the "Game facts" table
