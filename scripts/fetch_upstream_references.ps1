@@ -4,7 +4,7 @@ $target = Join-Path $root "_research\upstream"
 New-Item -ItemType Directory -Force -Path $target | Out-Null
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Error "Git no esta disponible. Claude puede usar WebSearch/WebFetch o descargar archivos por otros medios."
+    Write-Error "Git is not available. Use WebSearch/WebFetch or download the sources another way."
     exit 1
 }
 
@@ -14,16 +14,20 @@ $repos = @{
     "UnleashedRecomp" = "https://github.com/hedge-dev/UnleashedRecomp.git"
     "reblue" = "https://github.com/zolaware/reblue.git"
     "reblue-XenosRecomp" = "https://github.com/zolaware/reblue-XenosRecomp.git"
+    "plume" = "https://github.com/renderbag/plume.git"
+    "skate3recomp" = "https://github.com/mchughalex/skate3recomp.git"
+    "The-Darkness-Recomp" = "https://github.com/portingpete/The-Darkness-Recomp.git"
+    "LostOdysseyRecomp" = "https://github.com/freefrank/LostOdysseyRecomp.git"
 }
 
 foreach ($name in $repos.Keys) {
     $dest = Join-Path $target $name
     if (Test-Path $dest) {
-        Write-Host "[SKIP] $name ya existe"
+        Write-Host "[SKIP] $name already exists"
         continue
     }
     Write-Host "[CLONE] $name"
     git clone --depth 1 $repos[$name] $dest
 }
 
-Write-Host "Referencias disponibles en $target"
+Write-Host "References available in $target (see docs/UPSTREAM_RESEARCH.md for the inspected commits)"

@@ -1,7 +1,9 @@
-# Strategy review: `informe.md` against the measured Conan port
+# Strategy review: a "second-generation" DX12 backend proposal vs the measured Conan port
 
-> Written 2026-09-27. Input: `informe.md` (an external AI's "second-generation DX12 backend"
-> proposal) and the whole kit (docs, reference renderer, experiment log, SDK fork).
+> Written 2026-09-27. Input: an external AI's "second-generation DX12 backend" proposal
+> (a temporary `informe.md`, since removed from the repo; the § numbers in the table below
+> refer to its sections, and each row restates the proposal so the table stands alone)
+> and the whole kit (docs, reference renderer, experiment log, SDK fork).
 > Output: what to adopt, what to adopt only behind a measurement gate, what to reject and
 > why, plus new items and inconsistencies found in the kit. The adopted items are already
 > merged into PERFORMANCE_GUIDE.md §"Where is the frame bound?" / §"Gated optimizations",
@@ -51,7 +53,7 @@ correctness or with evidence; **Done** = the kit already does it (sometimes bett
 | 3 "conan_pipelines.bin is fragile / tied to driver" | - | **Wrong premise** | The file holds pointer-free PSO *descriptions* (inputs), machine-independent; the driver's own cache holds the blobs. That is exactly the proposal's "layer 2" |
 | 3.1 L1 | `ID3D12PipelineLibrary` driver blobs on disk | **Gated** (G8) | Warm driver cache already gives 0.05 ms median creation (EXP-044). Worth it only if cold-start precompile time (1.6 s for 121 PSOs) grows large for a game with thousands of PSOs, or driver caches are observed to be evicted |
 | 3.1 L3 | Parallel startup precompile | **Done** | 1-4 below-normal threads, embedded base + local file (EXP-044) |
-| 3.1 L4 | Placeholder PSO, never block the frame | **Reject** | EXP-005: skipping or substituting a draw once can break the game permanently (exposure init feedback draw -> black scene). A wrong PSO for one frame is also a visible glitch. Correct answer: coverage (save packs, EXP-049/050 technique) + a **release gate "0 PSOs compiled during play"** (VALIDATION_GUIDE) |
+| 3.1 L4 | Placeholder PSO, never block the frame | **Reject** | EXP-005: skipping or substituting a draw once can break the game permanently (exposure init feedback draw -> black scene). A wrong PSO for one frame is also a visible glitch. Correct answer: coverage (save packs and generated saves, PERFORMANCE_GUIDE checklist item 8) + a **release gate "0 PSOs compiled during play"** (VALIDATION_GUIDE) |
 | 3.2 | PSO streams, minimize variation, canonical blend set | **Partial** | Streams: cosmetic. "Map to the nearest canonical state" = **Reject** (changes pixels). Removing the input layout from the PSO key is the real variation reducer -> G6 |
 | 3.3 | XXH3 PSO hash, reserved map | **Done** | |
 | 4.1 | Instancing detection, ExecuteIndirect batches | **Reject for XDK-era titles / Gated** (G5) | Per-draw constants differ, order matters, CPU cost is not in submission. Revisit only for a game with >3k draws and a worker on the critical path |
@@ -100,6 +102,9 @@ Ranked by expected gain on a guest-bound port. All are measurement-gated.
    functions that share registers are handled by the codegen (`context.cpp:48, 179-205`);
    `skip_lr` is incompatible with hooks that read `ctx.lr` (E026) - enable it last and
    only if no hook needs LR. Validate with the A/B scenarios + a long session, paired runs.
+   Field evidence (2026-09-27, ANY_GAME_CHECKLIST.md): UnleashedRecomp ships all of them on;
+   The Darkness Recomp ships all off as a "correctness profile". No before/after number was
+   found in either repository, so the gain must be measured here.
 2. **Guest XDK D3D cost** (G2). The hooks call the original XDK functions so their PM4 lands
    in the command segment for the mirror. That guest work (state flush, packet building)
    runs on the critical render thread. skate3recomp found guest packet building to be the
@@ -137,8 +142,8 @@ Ranked by expected gain on a guest-bound port. All are measurement-gated.
 4. `reference/conan/docs/PROJECT_STATE.md` "Next actions" is from before EXP-037..048
    (still mentions validating `resolution_scale`, which was renamed `render_scale`).
    Historical; new ports use `docs/templates/PROJECT_STATE.md`.
-5. `informe.md` lives at the kit root, where a fresh agent may take it as instructions.
-   **Fixed**: a header points here.
+5. The proposal file sat at the kit root, where a fresh agent could take it as
+   instructions. **Resolved**: removed; this review is the only record.
 6. `docs/templates/BENCHMARKS.csv` has no columns for the metrics that gate optimizations.
    **Fixed**: added `guest_ceiling_ms, worker_busy_pct, pso_compiled_in_play,
    resolve_copy_mb, upload_peak_mb, tex_decode_ms` (`scripts/check_kit.ps1` only checks the
@@ -151,13 +156,23 @@ Ranked by expected gain on a guest-bound port. All are measurement-gated.
    (it is the frozen, built-and-validated example); listed as phase-6 hardening in
    NATIVE_RENDERER_ARCHITECTURE.md §8 for the next port.
 
-## 5. Resulting backlog for the next port (in order)
+## 5. Where the outcome of this review lives
 
-1. Phases 0-7 unchanged (they produced a 47-58 dB native renderer in ~3 weeks).
-2. Phase 3 baseline now ends with the **bound classification** and records the guest
-   ceiling in BENCHMARKS.csv.
-3. Phase 6 adds the cheap hardening: DRED, PIX pass markers, NOT_ZEROED, RS 1.1.
-4. Phase 8 order: the Conan checklist -> G1 codegen flags -> G2 XDK D3D cost -> G11 PGO ->
-   renderer-side gated items only if the classification says renderer/GPU bound.
-5. Tooling investments that pay across games: shader numeric harness, capture replay,
-   native golden dumps, release gates, `game_profile` consolidation at game #2.
+The adopted items are now part of the procedure, so they are not repeated here: bound
+classification and codegen window -> playbook phase 3; setjmp/longjmp -> phase 1; hardening
+-> phase 6 and NATIVE_RENDERER_ARCHITECTURE §8; gated optimizations and their order ->
+PERFORMANCE_GUIDE; extra validation layers and release gates -> VALIDATION_GUIDE;
+game variability -> ANY_GAME_CHECKLIST.
+
+## 6. Proven vs untested (read before trusting a doc line)
+
+| Status | What |
+|---|---|
+| Proven on one game (Conan, XDK 2.0.5632) | Phases 0-10 of the playbook, the reference renderer, NativeGraphicsSystem, PSO precompile, launcher, release tooling, every LESSONS_LEARNED row |
+| Proven elsewhere, not yet in this kit | `[rexcrt]` (6 surveyed ReXGlue ports), setjmp/longjmp addresses (11 of 12), codegen register-locality flags (UnleashedRecomp, TiP), load-time PSO gating (reblue, UnleashedRecomp), native occlusion queries (reblue), clear-rect coalescing (LostOdysseyRecomp) |
+| Unit-tested only | `tools/re/xdk_layout.py` (synthetic layout, `scripts/tests/test_xdk_layout.py`); SDK sraw/srad carry fix (`scripts/tests/test_codegen_sra.py`, no game run with it yet) |
+| Documented, never run | G1-G14 as a set on a kit port, §8 hardening of NATIVE_RENDERER_ARCHITECTURE, shader numeric harness, native golden dumps, capture replay, scripted release gates, `game_profile`, handheld affinity proxy runs |
+| Expected to differ on the next game | XDK revision (xdk_sigs.py `fuzzy`/`missing` -> semantic discovery), engine pass structure, formats/primitive/packet types Conan never used (log once, implement), MEMEXPORT, 3D texture mips, multiple XEX/DLL modules, 60 fps titles (vblank per frame), shader heuristics keyed by Conan sampler names, shaders stored in compressed packages (UE3), late-XDK function names (xdk_layout.py) |
+
+The first time an untested item is used, record it as an EXP entry with numbers and move it
+to "proven" (or record why it was dropped).

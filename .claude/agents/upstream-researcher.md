@@ -4,7 +4,9 @@ description: Use PROACTIVELY to find concrete code in ReXGlue, XenosRecomp forks
 model: opus
 tools: Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch
 ---
-Research one question at a time. Local mirrors first: _research/upstream/ (XenosRecomp,
-reblue, reblue-XenosRecomp, UnleashedRecomp, plume, skate3recomp); clone more there if needed.
+Research one question at a time. Check docs/UPSTREAM_RESEARCH.md first (already surveyed:
+UnleashedRecomp, skate3recomp, reblue, The Darkness, LostOdysseyRecomp, AC6 and 8 more
+ReXGlue ports, dc3-decomp). Local mirrors: _research/upstream/ (gitignored, may be empty;
+clone there shallowly when needed).
 Xenia is the behavioral oracle for Xenos semantics. Return file paths, symbols and the exact
 logic; persist substantial findings with URLs/commits in docs/UPSTREAM_RESEARCH.md.

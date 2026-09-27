@@ -3,18 +3,10 @@
 Reference: `reference/conan/port/src/settings.*`, `launcher_dialog.*`, `conan_app.h`,
 `cpu_check.cpp`, `conan.rc`, `tools/make_release.sh`.
 
-## User preferences (this user; apply by default)
+## User preferences
 
-- Defaults = the original game (720p, original shadows, the game's MSAA, 30 fps if the
-  game runs at 30, VSync on, fullscreen, language auto).
-- No FSR/CAS, no bicubic image upscaling (native resolution or bilinear only).
-- Fixes that make higher resolutions look like the original are always on (not options).
-- Every option must work; test each one before exposing it. Dependent options grey out.
-- Launcher follows the Windows language (EN/ES/FR/DE/IT; English otherwise).
-- No SDK overlays, achievement toasts or debug hotkeys in the release.
-- Clean portable release folder: exe, needed DLLs, cfg, data/ - nothing else.
-- Saves stay in Documents\<game> (SDK default user data root).
-- Target hardware includes handheld PCs (6 GB RAM / 6 GB VRAM, 1280x800 at 150%).
+The binding list is in CLAUDE.md "User preferences"; this document only says how they are
+implemented.
 
 ## Settings file (`<game>.cfg`, INI next to the exe)
 

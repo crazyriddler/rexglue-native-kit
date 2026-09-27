@@ -347,10 +347,12 @@ bool build_slw(BuilderContext& ctx) {
 
 bool build_srad(BuilderContext& ctx) {
   ctx.println("\t{}.u64 = {}.u64 & 0x7F;", ctx.temp(), ctx.r(ctx.insn.operands[2]));
+  // A shift count >= 64 shifts every source bit out, so CA = sign even for 0x8000...0
+  // (the clamped comparison below alone would clear it). PowerPC ISA 2.02 Book I, srad.
+  ctx.println("\t{}.ca = ({}.s64 < 0) & (({}.u64 > 0x3F) | ((({}.s64 >> ({}.u64 & 0x3F)) << ({}.u64 & 0x3F)) != {}.s64));",
+              ctx.xer(), ctx.r(ctx.insn.operands[1]), ctx.temp(), ctx.r(ctx.insn.operands[1]),
+              ctx.temp(), ctx.temp(), ctx.r(ctx.insn.operands[1]));
   ctx.println("\tif ({}.u64 > 0x3F) {}.u64 = 0x3F;", ctx.temp(), ctx.temp());
-  ctx.println("\t{}.ca = ({}.s64 < 0) & ((({}.s64 >> {}.u64) << {}.u64) != {}.s64);", ctx.xer(),
-              ctx.r(ctx.insn.operands[1]), ctx.r(ctx.insn.operands[1]), ctx.temp(), ctx.temp(),
-              ctx.r(ctx.insn.operands[1]));
   ctx.println("\t{}.s64 = {}.s64 >> {}.u64;", ctx.r(ctx.insn.operands[0]),
               ctx.r(ctx.insn.operands[1]), ctx.temp());
   emitRecordFormCompare(ctx);
@@ -374,10 +376,12 @@ bool build_sradi(BuilderContext& ctx) {
 
 bool build_sraw(BuilderContext& ctx) {
   ctx.println("\t{}.u32 = {}.u32 & 0x3F;", ctx.temp(), ctx.r(ctx.insn.operands[2]));
+  // A shift count >= 32 shifts every source bit out, so CA = sign even for 0x80000000
+  // (the clamped comparison below alone would clear it). PowerPC ISA 2.02 Book I, sraw.
+  ctx.println("\t{}.ca = ({}.s32 < 0) & (({}.u32 > 0x1F) | ((({}.s32 >> ({}.u32 & 0x1F)) << ({}.u32 & 0x1F)) != {}.s32));",
+              ctx.xer(), ctx.r(ctx.insn.operands[1]), ctx.temp(), ctx.r(ctx.insn.operands[1]),
+              ctx.temp(), ctx.temp(), ctx.r(ctx.insn.operands[1]));
   ctx.println("\tif ({}.u32 > 0x1F) {}.u32 = 0x1F;", ctx.temp(), ctx.temp());
-  ctx.println("\t{}.ca = ({}.s32 < 0) & ((({}.s32 >> {}.u32) << {}.u32) != {}.s32);", ctx.xer(),
-              ctx.r(ctx.insn.operands[1]), ctx.r(ctx.insn.operands[1]), ctx.temp(), ctx.temp(),
-              ctx.r(ctx.insn.operands[1]));
   ctx.println("\t{}.s64 = {}.s32 >> {}.u32;", ctx.r(ctx.insn.operands[0]),
               ctx.r(ctx.insn.operands[1]), ctx.temp());
   emitRecordFormCompare(ctx);

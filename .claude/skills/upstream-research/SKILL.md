@@ -4,6 +4,8 @@ description: Research upstream static-recompilation / Xenos projects for a concr
 ---
 # Upstream research
 
-Define the question; search the local mirrors in _research/upstream/ first, clone more there
-if needed; compare two implementations when contested; extract files/functions/logic; record
-URLs/commits in docs/UPSTREAM_RESEARCH.md; return to implementation.
+1. Check docs/UPSTREAM_RESEARCH.md first (projects already surveyed, with file references).
+2. Define one concrete question; shallow-clone into `_research/upstream/<repo>`
+   (gitignored); compare two implementations when contested.
+3. Record files/functions/logic with URL + commit in docs/UPSTREAM_RESEARCH.md; a rule that
+   holds for any game -> docs/ANY_GAME_CHECKLIST.md. Return to implementation.

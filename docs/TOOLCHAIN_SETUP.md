@@ -1,21 +1,33 @@
-# Toolchain setup (this PC: no admin rights, no Visual Studio instance)
+# Toolchain setup (no admin rights, no Visual Studio instance needed)
 
-Everything is per-user and already installed on this PC (September 2026). Verify, do not
-reinstall. `scripts/dev_env.sh` wires it together from the paths in `kit.env`.
+Everything is per-user. The locations below are the kit author's PC (September 2026): on
+another PC install the same tools anywhere (the last column says how, without admin rights)
+and set the paths in `kit.env`; `scripts/dev_env.sh` wires them together. Verify before
+reinstalling.
 
-| Tool | Location on this PC | How it was obtained (if it must be redone) |
+| Tool | Location on the author's PC | How it was obtained (if it must be redone) |
 |---|---|---|
 | LLVM/Clang 23.1.1 (clang, clang++, lld, llvm-symbolizer) | `C:\Users\jrbar\tools\clang+llvm-23.1.1-x86_64-pc-windows-msvc` | Official portable release tarball `clang+llvm-<ver>-x86_64-pc-windows-msvc.tar.xz` (not the installer) |
 | MSVC CRT + Windows SDK headers/libs | `C:\Users\jrbar\tools\xwin_sysroot` | `xwin` (github.com/Jake-Shadle/xwin) `splat --include-debug-libs`; one symlink error (os error 1314) is cosmetic |
 | Ninja | `%APPDATA%\Python\Python314\Scripts\ninja.exe` | `python -m pip install --user ninja` |
 | CMake >= 3.25 | on PATH | - |
 | Python 3.14 + numpy, Pillow, xxhash, pycryptodome | on PATH | `pip install --user numpy pillow xxhash pycryptodome` |
-| DXC v1.9.2607 | `tools/dxc` (in the kit) | `tools/shaders/build_corpus.sh` downloads it if missing |
+| DXC v1.9.2607 | `tools/dxc` (local; gitignored) | `tools/shaders/build_corpus.sh` downloads it if missing |
 | PowerPC binutils (objdump) | `tools/binutils` (in the kit) | - |
 | ProcDump | `C:\Users\jrbar\tools\procdump` | Sysinternals zip |
 | DbgEng debugger (`windbg-tool.exe`) | `C:\Users\jrbar\tools\windbgtool` | NuGet package `devolutions.windbg.tool.win-x64` (plain zip), MCP-style tools over dumps/live processes |
 | RenderDoc 1.37 portable | `C:\Users\jrbar\tools\renderdoc` | Launch under `renderdoccmd capture` from process start (late inject does not hook D3D12) |
 | Visual C++ redistributable DLLs (release folder) | `C:\Program Files\Microsoft Visual Studio\2022\*\VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT` | `kit.env VC_REDIST_GLOB` |
+
+## SDK third-party code (fresh clone only)
+
+`sdk/thirdparty/*/` (~400 MB of vendored dependencies, no submodules) is gitignored, so a
+kit cloned from GitHub has only `sdk/thirdparty/CMakeLists.txt`. Run
+`bash scripts/restore_sdk_thirdparty.sh` once: it fetches every entry at the commit the
+SDK base (`c94f5eb`) pins, removes `.git` (vendored layout), fixes symlink placeholders on
+Windows and applies the kit patches in `sdk/patches/thirdparty/` (today: the disruptorplus
+`wait_for`/`wait_until` argument order, EXP-040). Existing non-empty entries are never
+touched. A local kit that already has `sdk/thirdparty/` needs nothing.
 
 ## Build configurations
 

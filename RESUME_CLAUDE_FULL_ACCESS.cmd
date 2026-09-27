@@ -4,7 +4,7 @@ cd /d "%~dp0"
 
 where claude >nul 2>nul
 if errorlevel 1 (
-  echo [ERROR] Claude Code no esta disponible en PATH.
+  echo [ERROR] Claude Code is not available in PATH.
   pause
   exit /b 1
 )

@@ -36,3 +36,6 @@ tools/xenosrecomp/build/
 *.wpix
 *.etl
 *.dmp
+
+# Upstream research clones (docs/UPSTREAM_RESEARCH.md lists the inspected commits)
+_research/upstream/*/

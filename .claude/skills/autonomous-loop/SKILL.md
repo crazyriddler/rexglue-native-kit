@@ -4,9 +4,9 @@ description: Drive the port continuously when the next step is not explicit, aft
 ---
 # Autonomous loop
 
-Read CLAUDE.md and the state docs, then repeat: pick the highest-value unresolved question
-or bottleneck for the current phase (docs/NATIVE_PORT_PLAYBOOK.md) -> check
-docs/LESSONS_LEARNED.md for a known answer -> falsifiable hypothesis -> smallest change or
-instrumentation -> build -> run the scenario -> measure/compare (A/B, benchmarks) -> keep or
-revert -> update docs -> commit -> next. Do not stop because an experiment failed; do not ask
-the user to choose among engineering options. Brief Spanish status notes to the user.
+1. docs/DECISION_GUIDE.md §1 (where am I) -> the current phase in docs/NATIVE_PORT_PLAYBOOK.md.
+2. Run the loop of DECISION_GUIDE §2 on the highest-value item by the priorities of §3;
+   use the symptom router (§4) before investigating anything already solved.
+3. Record per DECISION_GUIDE §5, commit, repeat. A failed experiment is a result, not a stop.
+4. Stop only for a real external blocker or at a milestone with PROJECT_STATE "Next actions"
+   written; brief status note to the user in their language.

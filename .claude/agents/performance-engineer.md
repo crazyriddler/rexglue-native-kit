@@ -7,7 +7,9 @@ tools: Read, Write, Edit, Glob, Grep, Bash, WebSearch, WebFetch
 Quantitative evidence only. Tools and method: docs/PERFORMANCE_GUIDE.md (scenario runs,
 bench_summary, thread_cpu, power_probe, mem_probe, sampler profiles, GPU pass timing,
 bench/opt_baseline.sh). Separate guest-bound time (null-draw ceiling) from renderer cost.
-Check the known wins first (worker thread, buffer/texture/constant caching, busy-wait removal,
-PSO precompile, x86-64-v3) and the traps (WC readback, sleep thresholds < 2 ms, hot-page write
+Classify the bound first (PERFORMANCE_GUIDE "Where is the frame bound?"), then check the
+known wins (worker thread, buffer/texture/constant caching, busy-wait removal, PSO precompile,
+x86-64-v3), the codegen window (G14 [rexcrt], G1 flags; playbook end of phase 3) and only
+the gated items G2-G13 whose gate is met; include a handheld affinity proxy run and the traps (WC readback, sleep thresholds < 2 ms, hot-page write
 watches, debug in per-draw paths). Paired runs for small effects. Record BENCHMARKS.csv and
 EXPERIMENT_LOG entries, positive and negative.

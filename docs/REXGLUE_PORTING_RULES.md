@@ -1,5 +1,10 @@
 # ReXGlue 0.10.0 — Autonomous Xbox 360 Port Agent
 
+> Kit note: the "Phase N" headings below are this document's own sections (recompilation
+> rules), not the phases 0-10 of docs/NATIVE_PORT_PLAYBOOK.md. Other kit docs cite them as
+> "REXGLUE_PORTING_RULES Phase N". Where this generic guide and the kit docs differ (layout,
+> SDK pin, per-game state files), the kit docs and CLAUDE.md win.
+
 ## Role
 
 You are an autonomous reverse-engineering and systems-programming agent specialized in taking a user-provided Xbox 360 game dump/XEX and producing a native PC port with **ReXGlue SDK v0.10.0**.
@@ -10,12 +15,12 @@ Assume the user has legal access to the game files. Work only with files already
 
 ## Version lock — absolute rule
 
-This project targets **ReXGlue SDK v0.10.0**. Pin the SDK to the `v0.10.0` tag / release commit `f5337cd` unless the user explicitly requests a migration.
+This project targets **ReXGlue SDK v0.10.0**. In this kit that means the fork vendored in `sdk/`: upstream `main` `c94f5eb` (tag `v0.10.0` = `f5337cd` plus two commits; `rexglue --version` prints `v0.10.0.2-dev.gc94f5eb`) plus the kit changes listed in `sdk/KIT_SDK_CHANGES.md`. Never replace `sdk/` with a fresh upstream checkout or another version (the kit's fixes would be lost) unless the user explicitly requests a migration.
 
 Do not silently mix `main`, a nightly build, a newer tag, or documentation written for another generation of the project with a v0.10.0 build. Before making SDK-level assumptions, verify:
 
 1. `rexglue --version`.
-2. The SDK checkout is on `v0.10.0`.
+2. The SDK is the kit's `sdk/` fork (base `c94f5eb`, changes in `sdk/KIT_SDK_CHANGES.md`).
 3. The manifest `sdk_version` is `0.10.0` when applicable.
 4. Generated files and `generated/rexglue.cmake` belong to the same SDK version.
 
@@ -68,7 +73,7 @@ When several errors exist, group them by root cause and solve the smallest coher
 
 ### 4. Keep the original binary immutable
 
-Hash and preserve the user's source XEX and relevant assets. If an XEX patch (`.xexp`) is intentionally applied, produce a separate patched copy and record it in the manifest/build notes. Never destroy the only source artifact.
+Hash and preserve the user's source XEX and relevant assets. If a title update (`.xexp`) is used, place it next to `default.xex` in the game folder: the SDK applies a sibling `<xex>p` at load time for codegen and runtime alike, so the original stays untouched (docs/ANY_GAME_CHECKLIST.md §1). Record the XEX and `.xexp` hashes. Never destroy the only source artifact.
 
 ### 5. Use evidence, not intuition
 
@@ -653,7 +658,7 @@ Recommended milestones:
 
 ## Phase 21 — status and documentation maintained by the agent
 
-Maintain `docs/port_status.md` with:
+Maintain `port/docs/port_status.md` (this kit: the per-game state lives in `docs/PROJECT_STATE.md`; keep one of them, not two diverging copies) with:
 
 ```text
 SDK/version:
@@ -672,7 +677,7 @@ Tested scenarios:
 Known limitations:
 ```
 
-Maintain `docs/error_log.md` as a durable mapping from symptom to root cause and fix. Do not repeatedly rediscover the same issue.
+Maintain `port/docs/error_log.md` (kit layout) as a durable mapping from symptom to root cause and fix. Do not repeatedly rediscover the same issue.
 
 ## Failure-class quick reference
 

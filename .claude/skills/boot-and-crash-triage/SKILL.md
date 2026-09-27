@@ -4,12 +4,7 @@ description: Phase 2: build, boot and fix runtime crashes/hangs until menus, gam
 ---
 # Boot and crash triage
 
-1. CMakeLists/app setup like reference/conan/port (GPU_PLUGINS xenos, imgui link, data discovery, gpu_plugin default, window title). Configure nr + nr-rel (docs/TOOLCHAIN_SETUP.md); build with bench/build.sh.
-2. Run with --mnk_mode (+ --autoinput_script for automation); read port/out/build/nr/logs.
-3. Classify each failure with docs/LESSONS_LEARNED.md section C:
-   - `[FATAL] Call to invalid or unregistered function` -> verify code in the disassembly, add a boundary override (register a whole visible thunk family at once);
-   - guest AV -> symbolize, read generated code, supply missing assets or guard to the function's own bail-out (never to a loop head);
-   - SDK native crash -> real fix in sdk/, documented;
-   - hang -> hang watchdog / ProcDump + windbg-tool host stacks; intermittent -> bench/repro_freeze.sh.
-4. One fix per run; record in port/docs/error_log.md.
-5. Build scripted scenarios (bench/scenario_*.txt) and the bench save in bench/userdata_template.
+Procedure: docs/NATIVE_PORT_PLAYBOOK.md Phase 2 - its **Decide** list classifies every
+failure type (unregistered function, guest AV, timing-dependent, hang, SDK crash).
+Evidence chains of solved cases: LESSONS_LEARNED C-D and reference/conan/port/docs/error_log.md
+(E010-E051). One fix per run; every fix -> port/docs/error_log.md.

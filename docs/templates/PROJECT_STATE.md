@@ -8,6 +8,20 @@
 - Renderer path: legacy Xenos | native A/B | fully native
 - Last A/B (swap: PSNR): -
 - Performance (scenario, build): -
+- Frame bound by (PERFORMANCE_GUIDE "Where is the frame bound?"): guest | worker | GPU | - ; guest ceiling: -
+
+## Game facts (docs/ANY_GAME_CHECKLIST.md)
+| Item | Answer |
+|---|---|
+| Revision: XEX / .xexp SHA-256, title update used? | |
+| XDK revision / xdk_sigs.py or xdk_layout.py result | |
+| Extra modules (.xex/.dll) | |
+| setjmp / longjmp addresses | |
+| `[rexcrt]` groups applied (memory/string, heap, file) | |
+| Codegen flags applied (G1) | |
+| Renderer strategy (XDK hooks / engine-level) and why | |
+| Shader source (raw containers / compressed packages / runtime harvest) | |
+| Presents every N vblanks (fps cap rule) | |
 
 ## Build
 ```bash

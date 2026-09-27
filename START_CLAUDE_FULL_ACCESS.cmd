@@ -4,17 +4,17 @@ cd /d "%~dp0"
 
 where claude >nul 2>nul
 if errorlevel 1 (
-  echo [ERROR] Claude Code no esta disponible en PATH.
-  echo Instala/actualiza Claude Code y vuelve a ejecutar este archivo.
+  echo [ERROR] Claude Code is not available in PATH.
+  echo Install or update Claude Code and run this file again.
   pause
   exit /b 1
 )
 
 echo ============================================================
 echo  ReXGlue Native Port Kit - Claude Code
-echo  Carpeta: %CD%
-echo  GitHub remoto: NO requerido
-echo  Modo: bypassPermissions
+echo  Folder: %CD%
+echo  GitHub remote: NOT required
+echo  Mode: bypassPermissions
 echo ============================================================
 echo.
 

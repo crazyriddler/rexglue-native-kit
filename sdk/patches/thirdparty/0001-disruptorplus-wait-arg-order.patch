@@ -1,0 +1,32 @@
+diff --git a/thirdparty/disruptorplus/include/disruptorplus/blocking_wait_strategy.hpp b/thirdparty/disruptorplus/include/disruptorplus/blocking_wait_strategy.hpp
+index 32d427d..23fd3e1 100644
+--- a/thirdparty/disruptorplus/include/disruptorplus/blocking_wait_strategy.hpp
++++ b/thirdparty/disruptorplus/include/disruptorplus/blocking_wait_strategy.hpp
+@@ -118,11 +118,11 @@ namespace disruptorplus
+                 std::unique_lock<std::mutex> lock(m_mutex);
+                 m_cv.wait_for(
+                     lock,
++                    timeout,
+                     [&]() -> bool {
+                         result = minimum_sequence_after(sequence, count, sequences);
+                         return difference(result, sequence) >= 0;
+-                    },
+-                    timeout);
++                    });
+             }
+             return result;
+         }
+@@ -171,11 +171,11 @@ namespace disruptorplus
+                 std::unique_lock<std::mutex> lock(m_mutex);
+                 m_cv.wait_until(
+                     lock,
++                    timeoutTime,
+                     [&]() -> bool {
+                         result = minimum_sequence_after(sequence, count, sequences);
+                         return difference(result, sequence) >= 0;
+-                    },
+-                    timeoutTime);
++                    });
+             }
+             return result;
+         }

@@ -76,15 +76,11 @@ the Conan heuristics above), settings/launcher framework, cpu_check, hang watchd
 release tooling. Expect to fix new formats/primitive types/packet types the new game uses
 that Conan did not (log unknown ones once, then implement).
 
-## 4. Order of work for a new game (native phase)
+## 4. Order of work
 
-1. Hooks from section 1 in **capture-only** mode (call originals, Xenos still renders) +
-   `d3d_capture` catalog (draws/resolves/passes per frame).
-2. NativeGraphicsSystem later; first run the native renderer in A/B mode next to Xenos
-   (`native_ab_mode`) so every step is compared frame-exactly.
-3. HUD/2D first (BeginVertices, simple states), then post chain, then scene passes.
-4. When A/B >= ~45 dB across scenarios, switch the default to native + NativeGraphicsSystem
-   (no plugin) and keep A/B mode for regressions.
+The bring-up order (capture-only hooks -> native renderer in `native_ab_mode` next to Xenos ->
+pass families -> default to native + NativeGraphicsSystem) is the procedure of playbook
+phases 4, 6 and 7.
 
 ## 5. Toward one renderer for many games (do this while porting game #2)
 
