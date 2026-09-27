@@ -12,7 +12,7 @@ only if the whole frame improves in paired runs and A/B at scale 1 is unchanged.
 
 - Scenario: scripted input (`--autoinput_script`, bench/scenario_*.txt), fixed save
   (bench/userdata_template copied fresh per run), `--bench_exit_after_s`, per-frame CSV
-  (`--perf_log_csv`), window t=50..90 s. `tools/bench_summary.py <csv> <skip> <t0> <t1>`.
+  (`--perf_log_csv`), window t=50..90 s. `tools/bench_summary.py <csv> <window_s> <from_s> <to_s>` (e.g. `40 50 90`).
 - Unlocked frame time: `--unlocked_vblank_rate=1000 --fps_limit=0 --vsync=false`.
   Guest-bound ceiling: legacy `--gpu_null_draws=true` (CP consumes PM4 but draws nothing).
 - At a frame cap (handheld case): process CPU (`tools/power_probe.py`, also GPU power via

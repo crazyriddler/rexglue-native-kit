@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # usage: SCEN=bench/scenario_x.txt bench/ab_swap.sh <name> <swap> <exit_s> [extra]
 # Frame-exact A/B of one guest swap (native full-frame dump vs Xenos screenshot).
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT" || exit 1
 set -a; source kit.env; set +a
 N=$1; S=$2; E=$3; shift 3
 D=artifacts/captures/$N; mkdir -p "$D"; rm -f "${D:?}"/*

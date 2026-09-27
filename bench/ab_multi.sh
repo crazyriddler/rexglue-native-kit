@@ -5,7 +5,7 @@
 # build (Xenos plugin available) and native_ab_mode in the renderer.
 # Prints PSNR per swap and writes artifacts/captures/<name>_sheet.png
 # (native | xenos | diff x8). Compare by guest swap number, never by time.
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT" || exit 1
 N=$1; SCEN=$2; E=$3; S=$4; shift 4
 D=artifacts/captures/$N; mkdir -p "$D"; rm -f "${D:?}"/*
 rm -rf "artifacts/screenshots/${N:?}"

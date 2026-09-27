@@ -3,7 +3,7 @@
 # Runs a scenario N times (dev build, logs on) and classifies each run:
 # HANG = the hang watchdog fired (no guest swap for native_hang_watchdog_s; it
 # logs every thread's stack). Use it to turn "sometimes freezes" into a rate.
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT" || exit 1
 set -a; source kit.env; set +a
 N=$1; SCEN=$2; shift 2
 LOGS=$PORT_DIR/out/build/$BUILD_DEV/logs

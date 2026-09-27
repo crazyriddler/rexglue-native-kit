@@ -6,7 +6,7 @@
 # usage: SCEN_A=bench/scenario_a.txt SCEN_B=bench/scenario_b.txt bench/opt_baseline.sh <tag> [extra cvars]
 # REL=<exe dir> selects another build. Results: artifacts/profiles/opt_<tag>.txt
 set -u
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT" || exit 1
 set -a; source kit.env; set +a
 TAG=$1; shift
 REL=${REL:-$ROOT/$PORT_DIR/out/build/$BUILD_REL}

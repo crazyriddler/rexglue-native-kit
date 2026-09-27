@@ -35,6 +35,10 @@ def load(p):
     rs = struct.unpack('<III', d[4:16])[1]
     return d[:16], [d[16 + i * rs:16 + (i + 1) * rs] for i in range((len(d) - 16) // rs)]
 hb, a = load(base)
+if not os.path.exists(local):
+    # The native renderer creates this file at every start: missing = the renderer did not
+    # run or it writes another name (pipeline_cache.cpp must use <GAME_NAME>_pipelines.bin).
+    sys.exit(f'[pipelines] ERROR: {local} was not created by the runs; base left unchanged')
 hl, b = load(local)
 header = hl or hb
 if header is None:

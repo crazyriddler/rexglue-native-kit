@@ -21,7 +21,7 @@ in Git Bash unless noted.
 
 | Tool | Use |
 |---|---|
-| `bench_summary.py <csv> <skip_s> <t0> <t1>` | frame time avg/p50/p95/p99 + per-frame counters |
+| `bench_summary.py <csv> [window_s] [from_s] [to_s]` | one line per `window_s` slice of [from_s, to_s) plus a TOTAL line: frame time avg/p50/p95/p99 + per-frame counters (e.g. `... 40 50 90` = one 50-90 s line + TOTAL) |
 | `thread_cpu.py <secs> [exe] [top]` / `thread_cpu.ps1` | per-thread CPU (names) of the running game |
 | `power_probe.py <secs> <delay> <out>` | process CPU + NVIDIA GPU power/util |
 | `mem_probe.ps1 <delay>` | RAM working set/private |
