@@ -5,6 +5,10 @@
 
 # Locate PPC toolchain in tools/ directory
 set(PPC_TOOLS_DIR "${PROJECT_SOURCE_DIR}/tools/binutils")
+# Native-port kit: the SDK lives in <kit>/sdk and the binutils in <kit>/tools/binutils.
+if(NOT EXISTS "${PPC_TOOLS_DIR}" AND EXISTS "${PROJECT_SOURCE_DIR}/../tools/binutils")
+    set(PPC_TOOLS_DIR "${PROJECT_SOURCE_DIR}/../tools/binutils")
+endif()
 
 if(WIN32)
     set(PPC_ASSEMBLER "${PPC_TOOLS_DIR}/powerpc-none-elf-as.exe")

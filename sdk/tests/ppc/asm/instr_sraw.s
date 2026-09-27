@@ -195,3 +195,38 @@ test_sraw_9_constant:
   #_ REGISTER_OUT r4 0xFFFFFFFFFFFFFFFF
   #_ REGISTER_OUT r5 32
   #_ REGISTER_OUT r6 1
+
+# Only the sign bit set, shift >= 32: every source bit is shifted out, so CA = sign = 1.
+# Regression for the clamped-shift carry bug (sdk/KIT_SDK_CHANGES.md, codegen correctness).
+test_sraw_signbit_32:
+  #_ REGISTER_IN r4 0x0000000080000000
+  #_ REGISTER_IN r5 32
+  sraw r3, r4, r5
+  adde r6, r0, r0
+  blr
+  #_ REGISTER_OUT r3 0xffffffffffffffff
+  #_ REGISTER_OUT r4 0x0000000080000000
+  #_ REGISTER_OUT r5 32
+  #_ REGISTER_OUT r6 1
+
+test_sraw_signbit_63:
+  #_ REGISTER_IN r4 0x0000000080000000
+  #_ REGISTER_IN r5 63
+  sraw r3, r4, r5
+  adde r6, r0, r0
+  blr
+  #_ REGISTER_OUT r3 0xffffffffffffffff
+  #_ REGISTER_OUT r4 0x0000000080000000
+  #_ REGISTER_OUT r5 63
+  #_ REGISTER_OUT r6 1
+
+test_sraw_signbit_31:
+  #_ REGISTER_IN r4 0x0000000080000000
+  #_ REGISTER_IN r5 31
+  sraw r3, r4, r5
+  adde r6, r0, r0
+  blr
+  #_ REGISTER_OUT r3 0xffffffffffffffff
+  #_ REGISTER_OUT r4 0x0000000080000000
+  #_ REGISTER_OUT r5 31
+  #_ REGISTER_OUT r6 0

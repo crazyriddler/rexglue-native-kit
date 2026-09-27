@@ -151,3 +151,27 @@ test_srad_7_constant:
   #_ REGISTER_OUT r4 0xFFFFFFFFFFFFFFFF
   #_ REGISTER_OUT r5 100
   #_ REGISTER_OUT r6 1
+
+# Only the sign bit set, shift >= 64: every source bit is shifted out, so CA = sign = 1.
+# Regression for the clamped-shift carry bug (sdk/KIT_SDK_CHANGES.md, codegen correctness).
+test_srad_signbit_64:
+  #_ REGISTER_IN r4 0x8000000000000000
+  #_ REGISTER_IN r5 64
+  srad r3, r4, r5
+  adde r6, r0, r0
+  blr
+  #_ REGISTER_OUT r3 0xffffffffffffffff
+  #_ REGISTER_OUT r4 0x8000000000000000
+  #_ REGISTER_OUT r5 64
+  #_ REGISTER_OUT r6 1
+
+test_srad_signbit_63:
+  #_ REGISTER_IN r4 0x8000000000000000
+  #_ REGISTER_IN r5 63
+  srad r3, r4, r5
+  adde r6, r0, r0
+  blr
+  #_ REGISTER_OUT r3 0xffffffffffffffff
+  #_ REGISTER_OUT r4 0x8000000000000000
+  #_ REGISTER_OUT r5 63
+  #_ REGISTER_OUT r6 0
