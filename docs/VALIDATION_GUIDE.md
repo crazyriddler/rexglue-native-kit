@@ -51,3 +51,39 @@ a saved level, combat/effects, pause menu + resume, a level transition, long ses
 The user's own saves folder is off-limits: create bench saves inside the bench user data.
 Window captures: `tools/capture_window.py` (own process only, PrintWindow with
 PW_RENDERFULLCONTENT; screen copy does not capture D3D content reliably).
+
+## Additional validation layers (added by docs/STRATEGY_REVIEW.md)
+
+These complement the Xenos A/B; none replaces it.
+
+### Shader numeric harness (open question Q-S1 of the reference)
+A/B proves the shaders a scenario uses. For the rest of the corpus: run each translated
+shader on WARP (D3D12 software device, deterministic) with seeded random constants/inputs
+and compare with the SDK's Xenos shader interpreter
+(`sdk/src/graphics/pipeline/shader/interpreter.cpp`) on the same inputs. Tolerance in ULPs;
+report per shader in SHADER_CATALOG.md ("numeric: ok / diff / n.a."). Run it whenever the
+XenosRecomp patch changes. Build it once as a kit tool (`tools/shaders/`), it is generic.
+
+### Native golden dumps (regression without the plugin)
+After a milestone passes A/B, store `native_dump_swap` outputs for the scenario swaps as
+goldens (`artifacts/goldens/<scenario>/<swap>.png`, not in git if large). Renderer
+refactors then compare native-vs-golden (expect identical or > 60 dB) in one run, without
+loading Xenos; a real change of output still goes through A/B.
+
+### Capture replay (renderer without the game)
+WorkCmd batches are self-contained (captured guest ranges + buffer plans; texture memory
+is read live, so a replay file must also snapshot the texture/constant pages the frame
+reads). Serializing N frames lets you profile the recording worker in isolation, bisect
+renderer regressions quickly and run the renderer under GPU-based validation without the
+game. Medium effort; build it when a second game is ported or the worker becomes the
+bottleneck.
+
+### Release gates (scriptable from the logs)
+| Gate | Source |
+|---|---|
+| A/B >= 45 dB on every scenario swap | ab_multi.sh |
+| 0 PSOs compiled during play (after precompile) on the scenario set | "PSO #n created" log lines after startup |
+| 0 frames > 50 ms outside loading screens | perf CSV + scenario timeline |
+| 0 hangs in `repro_freeze.sh` N runs + long session | watchdog |
+| CPU at the frame cap not worse than the previous release (paired) | opt_baseline.sh |
+| No D3D12 debug-layer errors on one scenario, one GPU-based validation run per milestone | `--d3d12_debug=true` log |

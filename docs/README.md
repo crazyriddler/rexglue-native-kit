@@ -8,7 +8,8 @@
 | NATIVE_RENDERER_ARCHITECTURE.md | how the native renderer and NativeGraphicsSystem work |
 | XDK_D3D_NOTES.md | XDK D3D device/resources/command stream and Xenos semantics |
 | SHADER_PIPELINE.md | shader corpus, XenosRecomp patch features |
-| PERFORMANCE_GUIDE.md | measuring and optimizing; what cost what |
+| PERFORMANCE_GUIDE.md | measuring and optimizing; what cost what; bound classification; gated optimizations |
+| STRATEGY_REVIEW.md | before proposing a renderer redesign: which "second-generation" ideas apply, which are rejected and why |
 | VALIDATION_GUIDE.md | frame-exact A/B, diagnosing differences, stability runs |
 | RELEASE_AND_SETTINGS.md | user preferences, cfg, launcher, app hooks, release |
 | TOOLCHAIN_SETUP.md | compilers, SDK build, configure commands |

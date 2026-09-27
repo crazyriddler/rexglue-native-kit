@@ -85,3 +85,15 @@ that Conan did not (log unknown ones once, then implement).
 3. HUD/2D first (BeginVertices, simple states), then post chain, then scene passes.
 4. When A/B >= ~45 dB across scenarios, switch the default to native + NativeGraphicsSystem
    (no plugin) and keep A/B mode for regressions.
+
+## 5. Toward one renderer for many games (do this while porting game #2)
+
+Every fact in section 2 is today a constant spread across native_renderer.cpp,
+d3d_capture.cpp, native_hooks.cpp, the manifest and the XenosRecomp patch. While adapting
+the second game, move them into one `src/native/game_profile.h` (or a TOML read at
+startup): hook addresses by role, device pointer/offsets, output and scene resolution,
+pass table indices by role (shadow, opaque, end-tiling, sorted, upscale, HUD), the
+shadow-atlas sampler name and kernel literal rule, the inverse view-projection constant
+name, vblank-per-frame, busy-wait loop addresses. The renderer then reads roles, never
+Conan numbers, and the XenosRecomp heuristics take the names from the profile. Keep it a
+refactor with A/B identical on the first game before using it on the second.

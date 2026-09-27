@@ -10,7 +10,7 @@ recompiled function for guest address 0xXXXXXXXX.
 
 ---
 
-## A. Toolchain and SDK build (phase 1)
+## A. Toolchain and SDK build (phase 0)
 
 | Symptom | Cause | Fix | Ref |
 |---|---|---|---|
@@ -22,7 +22,7 @@ recompiled function for guest address 0xXXXXXXXX.
 | Stale behaviour after an SDK change | CMake copies SDK DLLs only when the exe relinks | Always build with `bench/build.sh` (syncs rexruntime.dll) | EXP-005 |
 | `Git submodule 'x' is not initialized` with the kit SDK | Vendored copy has no `.git` | Already patched in the kit (`sdk/thirdparty/CMakeLists.txt` accepts vendored content) | kit |
 
-## B. Codegen (phase 2): "0 errors" is not "complete"
+## B. Codegen (phase 1): "0 errors" is not "complete"
 
 | Symptom | Cause | Fix | Ref |
 |---|---|---|---|
@@ -33,7 +33,7 @@ recompiled function for guest address 0xXXXXXXXX.
 | Midasm hook signature | `bool name(PPCRegister& r)` (plain C++ linkage). With `return`/`jump_address_on_*` the call is wrapped in `if (hook(...))` | `jump_address_on_false` may target ANY instruction boundary in the same function (codegen synthesizes the label) | E016, E027 |
 | Need LR inside a hook | The manifest register list has no `lr` | `rex::runtime::ThreadState::Get()->context()->lr` inside the hook | E026 |
 
-## C. Boot and runtime crashes (phase 3)
+## C. Boot and runtime crashes (phase 2)
 
 | Symptom | Cause | Fix | Ref |
 |---|---|---|---|
@@ -50,7 +50,7 @@ recompiled function for guest address 0xXXXXXXXX.
 | Attract-mode video mistaken for gameplay | Title screens loop demo videos | Check draw counts / input response | M9 notes |
 | Diagnosing crashes without a debugger | - | `patches/sdk`-style diagnostics: symbolize host RIP with dbghelp in the exception handler, dump PPCContext in the AV callback (reference/conan/port/patches/sdk/0001-crash-diagnostics.patch) | E016 |
 
-## D. Legacy (Xenos) path problems worth knowing (phase 3-4)
+## D. Legacy (Xenos) path problems worth knowing (phase 2-3)
 
 | Symptom | Cause | Fix | Ref |
 |---|---|---|---|
@@ -63,7 +63,7 @@ recompiled function for guest address 0xXXXXXXXX.
 | Drops near god rays | Occlusion queries waited for the GPU | One-frame-late query results (kit SDK) | E050 |
 | Whole frame re-uploaded | `clear_memory_page_state=true` | Default false (kit SDK) | E051 |
 
-## E. Native renderer bring-up (phase 5-6)
+## E. Native renderer bring-up (phase 5-7)
 
 | Symptom | Cause | Fix | Ref |
 |---|---|---|---|
@@ -93,7 +93,7 @@ recompiled function for guest address 0xXXXXXXXX.
 | Doubled shadow edges at higher shadow quality | Shader offsets/weights computed on the host texel grid, tap spacing in guest texels | TEX_SCALE bits keep blur kernels in guest texels; for the shadow atlas instead scale the baked PCF literals (`g_ShadowAtlasTexelScale`) | EXP-038, EXP-041 |
 | Square/striped glows and particles above 720p | Finest mips of small effect textures magnified | Smooth effects: cubic magnification + LOD bias log2(scale) for small textures in blended draws; linear sampling of upscaled color resolves (always on) | EXP-046, EXP-048 |
 
-## F. Performance (phase 7)
+## F. Performance (phase 8)
 
 | Finding | Detail | Ref |
 |---|---|---|
@@ -108,8 +108,9 @@ recompiled function for guest address 0xXXXXXXXX.
 | Shader stutter is driver PSO compilation | Offline DXIL is not enough: record PSOs, precompile at startup on low-priority threads, embed a base list | EXP-044 |
 | x86-64-v3 | ~2-5% on the recompiled code; needs `-ffp-contract=off` to keep PPC float rounding and a baseline-ISA CPU check | EXP-047 |
 | Remove debug from hot paths | Clock queries / logs per draw cost ~2% CPU even when never printing | EXP-047 |
+| Renderer-side optimization proposals (GPU-driven, ExecuteIndirect, culling, aliasing) | On an XDK-era title the frame is guest-bound (Conan 4.03 ms vs 3.97 ms guest ceiling, GPU 1.3 ms): they cannot move the frame. Classify the bound first; see docs/STRATEGY_REVIEW.md | STRATEGY_REVIEW |
 
-## G. Settings, launcher, release (phase 8)
+## G. Settings, launcher, release (phase 9-10)
 
 | Lesson | Ref |
 |---|---|

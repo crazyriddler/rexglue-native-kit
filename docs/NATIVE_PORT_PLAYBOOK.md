@@ -86,6 +86,8 @@ scenarios reach gameplay reproducibly.
 Scenario, 3 runs, legacy Release: frame time distribution, per-thread CPU, GPU time,
 draws/resolves/passes (`--d3d_capture_out`), null-draw ceiling. Write BENCHMARKS.csv and
 the first EXPERIMENT_LOG entries. Apply the SDK-level legacy fixes if the kit SDK lacks one.
+Finish with the bound classification (PERFORMANCE_GUIDE.md §"Where is the frame bound?"):
+record the guest ceiling; it decides which optimizations are worth anything later.
 
 ## Phase 4 - Renderer archaeology + capture (1-3 days)
 
@@ -109,6 +111,9 @@ capture hooks, PM4 mirror, texture decode, renderer, worker, A/B mode. Order:
 HUD/2D -> post chain -> scene passes -> shadows -> MSAA/alpha-to-coverage -> fidelity
 (pixel centers, gamma, rect lists, copy swap). Validate every step with
 `bench/ab_multi.sh` (VALIDATION_GUIDE.md) until 45-58 dB across scenarios.
+Add the cheap D3D12 hardening (NATIVE_RENDERER_ARCHITECTURE.md §8: DRED, PIX pass markers,
+NOT_ZEROED, root signature 1.1) and respect the invariants of §7 (never reorder, drop or
+cull submitted draws).
 
 ## Phase 7 - Fully native (days)
 
@@ -121,6 +126,11 @@ A/B mode kept for regressions.
 PERFORMANCE_GUIDE.md checklist: worker thread, buffers/textures/constants caching,
 busy-wait removal (fps cap CPU), PSO precompile + embedded base, x86-64-v3, memoized hot
 guest functions if profiled. Measure every step (opt_baseline.sh, paired runs).
+Then re-classify the bound and apply only the gated optimizations whose gate is met
+(PERFORMANCE_GUIDE.md §"Gated optimizations"). On a guest-bound game (the usual case):
+G1 codegen register-locality flags -> G2 guest XDK D3D cost -> G11 PGO. Renderer/GPU-side
+items (resolve elision, vertex fetch in shader, parallel recording) only when the
+classification says renderer- or GPU-bound.
 
 ## Phase 9 - Options, enhancements, launcher (days)
 
@@ -134,6 +144,8 @@ Validate each at scale 1 (A/B unchanged) and visually at 1440p/4K.
 
 Pipeline base from all scenarios, release folder, smoke test from the folder, long
 session, launcher screenshots in EN/ES, docs/PROJECT_STATE.md final, git tag.
+Release gates: VALIDATION_GUIDE.md §"Release gates" (A/B, 0 PSOs compiled in play,
+0 hitches outside loads, 0 hangs, CPU at the cap, clean debug layer).
 
 ---
 
