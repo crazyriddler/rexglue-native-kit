@@ -1,49 +1,29 @@
 # Upstream research map
 
-Public projects are reference material. The local port does not need a GitHub remote.
+The only index of external projects and the evidence taken from them. Rules derived from this
+evidence live elsewhere (ANY_GAME_CHECKLIST, PERFORMANCE_GUIDE); this file keeps what each
+project does, with commits and file paths, so a finding can be re-checked. Clone disposable
+copies shallowly into `_research/upstream/<repo>` (gitignored; `scripts/fetch_upstream_references.ps1`
+clones the main ones); never mix them into the game's source tree unless code is
+intentionally adapted (then note its license).
 
-## Priority references
+## Project index
 
-### ReXGlue SDK
-https://github.com/rexglue/rexglue-sdk
-
-Inspect current graphics interfaces, runtime plugin loading, IGraphicsSystem, manifests, examples and recent architectural changes.
-
-### XenosRecomp
-https://github.com/hedge-dev/XenosRecomp
-
-Study shader conversion, supported instructions, semantic fixes, offline pipelines and emitted HLSL/SPIR-V/DXIL-related workflows.
-
-### UnleashedRecomp
-https://github.com/hedge-dev/UnleashedRecomp
-
-Study how a game-specific renderer avoids general-purpose Xenos emulation, including renderer hooks, shader specialization, resource management and host graphics APIs.
-
-### re:Blue
-https://github.com/zolaware/reblue
-
-Study a ReXGlue-derived game port with a purpose-built modern renderer/RHI and identify reusable architecture rather than copying assumptions blindly.
-
-### re:Blue XenosRecomp fork
-https://github.com/zolaware/reblue-XenosRecomp
-
-Compare game-specific shader translation changes against upstream XenosRecomp.
-
-## Local clone convention
-
-When cloning, use:
-
-```text
-_research/upstream/rexglue-sdk
-_research/upstream/XenosRecomp
-_research/upstream/UnleashedRecomp
-_research/upstream/reblue
-_research/upstream/reblue-XenosRecomp
-```
-
-Prefer shallow clones initially. Fetch history only when commit archaeology is actually useful.
-
-Do not mix reference repos into the game's source tree unless code is intentionally vendored/adapted.
+| Project | URL | Use it for | Section |
+|---|---|---|---|
+| ReXGlue SDK | https://github.com/rexglue/rexglue-sdk | IGraphicsSystem, plugin loading, manifests, codegen, runtime; base of `sdk/` (`c94f5eb`) | throughout |
+| XenosRecomp | https://github.com/hedge-dev/XenosRecomp | shader container parsing, ucode -> HLSL -> DXIL | "Native renderer reference architecture" §3 |
+| reblue-XenosRecomp | https://github.com/zolaware/reblue-XenosRecomp | the fork the kit's shader pipeline pins (`339af41` + kit patch) | "Native renderer reference architecture" §3 |
+| UnleashedRecomp | https://github.com/hedge-dev/UnleashedRecomp | XDK-hook renderer, PSO precompile at load, fps/aspect patches, codegen flags | "Native renderer reference architecture" §1-2; findings also in ANY_GAME_CHECKLIST |
+| reblue (Blue Dragon) | https://github.com/zolaware/reblue | ReXGlue 0.10 native renderer on plume: PSO predictor, occlusion, physical buffers, DRED, frame interpolation | "Native renderer reference architecture" §5; "Survey" (reblue) |
+| plume | https://github.com/renderbag/plume | RHI used by UnleashedRecomp/reblue/LostOdyssey | "Native renderer reference architecture" §4 |
+| skate3recomp | https://github.com/mchughalex/skate3recomp | engine-level renderer, TU codegen, ultrawide frustum patch | "skate3recomp native renderer" |
+| The Darkness Recomp | https://github.com/portingpete/The-Darkness-Recomp | engine-level D3D11, XenonRecomp fixes, pacing findings, WARP tests | "The Darkness Recomp" |
+| LostOdysseyRecomp | https://github.com/freefrank/LostOdysseyRecomp | measurement discipline, clear coalescing, recompiler audit, UE3 shaders, 3C6T | "LostOdysseyRecomp" |
+| AC6_recomp and 10 more ReXGlue ports | see the survey table | ReXGlue behaviour across games: [rexcrt], setjmp, thread races, TU diffing | "Survey of other ReXGlue ports" |
+| dc3-decomp | https://github.com/rjkiv/dc3-decomp | CC0 XDK symbol map -> `tools/re/xdk_2012_dc3_symbols.tsv` | "Survey of other ReXGlue ports" |
+| NX1recomp | https://github.com/goshavindtburg/NX1recomp | ReXGlue + XenosRecomp project structure, shader dump tooling (not surveyed yet) | - |
+| Xenia | https://github.com/xenia-project/xenia | behavioural oracle for Xenos semantics (packets, EDRAM/resolves, formats, registers), not the target architecture | - |
 
 ---
 

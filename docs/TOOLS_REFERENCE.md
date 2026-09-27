@@ -55,7 +55,16 @@ in Git Bash unless noted.
 | `port/fix_broken_symlinks.py <git dir>` | text-file symlinks from Git without privilege |
 | `port/tga_to_dds.py` | convert an existing TGA asset to DDS for a loader that wants .dds |
 | `port/symbolize_offline.ps1`, `port/sample_thread_rip.ps1` | offline RIP symbolization / thread RIP sampling |
-| `collect_environment.ps1`, `init_local_git.ps1`, `new_experiment.ps1`, ... | environment/kit helpers from the original kit |
+| `port/input_helpers.ps1` | dot-source for real key/mouse injection into the game window and window screenshots (own process by GAME_NAME); prefer `--autoinput_script` for automation |
+| `ida/export_named_funcs.py` | IDA script: export named functions into the ReXGlue manifest's function TOML (keeps existing entries' metadata) |
+| `new_experiment.ps1 -Title <t>` | append the next numbered EXP entry template to docs/EXPERIMENT_LOG.md |
+| `init_local_git.ps1` | `git init` the kit root if needed (no remote) |
+| `collect_environment.ps1` | write a report of the installed tools and versions |
+| `verify_local_workspace.ps1` | check the kit control files, Claude Code and git are present |
+| `check_kit.ps1` | after phase 0: check the per-game state docs exist (fails on a fresh kit by design) |
+| `fetch_upstream_references.ps1` | shallow-clone the surveyed projects into `_research/upstream/` |
+| `requirements-dev.txt` | Python modules for the tools and tests (`python -m pip install --user -r scripts/requirements-dev.txt`) |
+| `PSReX/`, `vs/rexglue-devprompt.*`, `git/hook-pre-commit.ps1` | ReXGlue SDK maintainer tooling (Visual Studio developer shell, clang-format pre-commit hook); not used by the kit workflow, which builds with `dev_env.sh` + `bench/build.sh` |
 
 ## SDK cvars added by this fork (useful everywhere)
 

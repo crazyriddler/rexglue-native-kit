@@ -31,29 +31,16 @@ Use commits/tags/branches/worktrees locally when they improve experimentation. D
 
 ## External source research
 
-Public source code may be inspected from the Internet when useful.
-
-Preferred location for disposable clones:
-
-```text
-_research/upstream/<repository>
-```
-
-These are references, not the project repository.
-
-Useful examples:
-- rexglue/rexglue-sdk
-- hedge-dev/XenosRecomp
-- hedge-dev/UnleashedRecomp
-- zolaware/reblue
-- zolaware/reblue-XenosRecomp
-- other game-specific ReXGlue/recompilation ports discovered during research
-
-If `git clone` is inconvenient, use web access, raw file downloads, release archives, or another appropriate local research method.
+Public source code may be inspected from the Internet when useful: shallow clones in
+`_research/upstream/<repository>` (gitignored). The project index and what was already
+learned from each project: docs/UPSTREAM_RESEARCH.md. If `git clone` is inconvenient, use
+web access or release archives.
 
 ## Project autonomy
 
-Inside this working directory, take whatever engineering actions are needed to achieve the renderer goal:
+Inside this working directory you may take any engineering action the goal needs (the rules of
+CLAUDE.md and the priorities of docs/DECISION_GUIDE.md still decide *which* action is worth
+taking; the reference design is adapted, not replaced, unless measurements show a need):
 - edit/delete/rewrite source;
 - replace generated files;
 - alter ReXGlue integration;
