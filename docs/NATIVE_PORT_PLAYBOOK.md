@@ -28,7 +28,9 @@ _research/upstream/     local mirrors: XenosRecomp, reblue(-XenosRecomp), Unleas
 1. `source scripts/dev_env.sh`; verify clang/ninja/cmake/python (docs/TOOLCHAIN_SETUP.md).
 2. Inventory `game/`: default.xex (+ any .xex/.dll modules), size, SHA-256 of the XEX
    (record it; never modify the original - copy to patch). Title ID from the XEX header
-   (or later from the log).
+   (or later from the log). Go through docs/ANY_GAME_CHECKLIST.md §1: title update
+   (`.xexp` next to default.xex **before** codegen), extra modules, dump format, jump
+   tables, setjmp/longjmp addresses.
 3. Choose GAME_NAME (lowercase, no spaces) and fill `kit.env` (GAME_NAME, TITLE_ID,
    GUEST_WIDTH/HEIGHT when known).
 4. Build the rexglue CLI: `cd sdk && cmake --preset win-amd64 && cmake --build
@@ -96,6 +98,8 @@ record the guest ceiling; it decides which optimizations are worth anything late
    markers), scene/output resolution, shadow passes (GAME_ADAPTATION_GUIDE.md §2).
 3. Capture hooks (call originals): per-frame draws/resolves/passes catalog.
 4. docs/RENDERER_ANALYSIS.md with addresses, evidence and confidence.
+5. Renderer strategy decision (docs/ANY_GAME_CHECKLIST.md §2): XDK hooks (default) vs
+   engine-level capture, with the evidence for the choice.
 
 ## Phase 5 - Shader corpus (hours)
 
@@ -134,7 +138,8 @@ classification says renderer- or GPU-bound.
 
 ## Phase 9 - Options, enhancements, launcher (days)
 
-RELEASE_AND_SETTINGS.md: cfg + launcher; render resolution (arbitrary), shadow quality,
+RELEASE_AND_SETTINGS.md: cfg + launcher; game-behaviour features (high fps, ultrawide,
+FOV, mouse look) per docs/ANY_GAME_CHECKLIST.md §3, all off by default; render resolution (arbitrary), shadow quality,
 MSAA, anisotropy, FPS cap, VSync; fixes always on at higher resolutions (full-resolution
 scene, smooth effects, upscaled-resolve sampling, shadow kernel scaling); enhancements
 (foliage A2C, FXAA, SSAO, bloom quality, dithering, shadow smoothing, soft particles).

@@ -13,3 +13,7 @@ description: Phase 0: prepare a new port in the kit (toolchain check, game inven
 7. Copy docs/templates/* to docs/ and error_log.md to port/docs/; `git init` unless the kit is already a repository; first commit (game data is gitignored, never push it).
 8. Decoded image (scripts/port/xex_decode.py, or later --dump_xex_image) + objdump into port/logs/.
 9. Continue with /codegen-triage.
+
+Before codegen also answer docs/ANY_GAME_CHECKLIST.md §1: title update (.xexp next to
+default.xex, the SDK applies it for codegen and runtime; log "Loading XEX patch from"), extra
+modules (--scan-dll), revision SHA-256, setjmp/longjmp and save/restore helper addresses.

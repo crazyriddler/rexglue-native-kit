@@ -102,6 +102,9 @@ Ranked by expected gain on a guest-bound port. All are measurement-gated.
    functions that share registers are handled by the codegen (`context.cpp:48, 179-205`);
    `skip_lr` is incompatible with hooks that read `ctx.lr` (E026) - enable it last and
    only if no hook needs LR. Validate with the A/B scenarios + a long session, paired runs.
+   Field evidence (2026-09-27, ANY_GAME_CHECKLIST.md): UnleashedRecomp ships all of them on;
+   The Darkness Recomp ships all off as a "correctness profile". No before/after number was
+   found in either repository, so the gain must be measured here.
 2. **Guest XDK D3D cost** (G2). The hooks call the original XDK functions so their PM4 lands
    in the command segment for the mirror. That guest work (state flush, packet building)
    runs on the critical render thread. skate3recomp found guest packet building to be the

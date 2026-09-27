@@ -27,7 +27,10 @@ recompiled game + statically linked XDK D3D (untouched)
    `docs/RELEASE_AND_SETTINGS.md`, `docs/TOOLCHAIN_SETUP.md`, `docs/TOOLS_REFERENCE.md`,
    `docs/REXGLUE_PORTING_RULES.md` (codegen/manifest/hook rules for ReXGlue 0.10.0),
    `docs/UPSTREAM_RESEARCH.md`, `docs/STRATEGY_REVIEW.md` (verdict on a "GPU-driven
-   second-generation" renderer proposal: classify the bound before optimizing).
+   second-generation" renderer proposal: classify the bound before optimizing),
+   `docs/ANY_GAME_CHECKLIST.md` (what differs between titles: title updates, modules,
+   renderer strategy, high fps, ultrawide, input; answers from UnleashedRecomp, skate3recomp
+   and The Darkness Recomp).
 5. The worked example: `reference/conan/` (port sources, manifest with commented
    overrides, error_log.md E001-E051, EXPERIMENT_LOG EXP-001-048, RENDERER_ANALYSIS).
 

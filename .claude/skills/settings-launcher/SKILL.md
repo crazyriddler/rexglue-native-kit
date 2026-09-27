@@ -8,3 +8,4 @@ Adapt reference settings.*, launcher_dialog.*, app hooks (docs/RELEASE_AND_SETTI
 Defaults = original game; test every option (A/B at scale 1 unchanged, visual at 1440p/4K);
 dependent options grey out; launcher localized (Windows language), fits 1280x800 at 150%;
 screenshots with tools/capture_window.py in EN and ES.
+Game-behaviour features (high fps via delta-time fixes, ultrawide, FOV, mouse look): docs/ANY_GAME_CHECKLIST.md §3, off by default, tested at the original rate/aspect first.

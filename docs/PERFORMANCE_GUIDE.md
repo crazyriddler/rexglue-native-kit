@@ -90,7 +90,7 @@ Evaluation of where these come from: docs/STRATEGY_REVIEW.md.
 
 | ID | Optimization | Gate (start only if...) | Risk / validation |
 |---|---|---|---|
-| G1 | Codegen register locality: manifest `ctr_as_local`, `xer_as_local`, `reserved_as_local`, `cr_as_local`, `non_argument_as_local`, `non_volatile_as_local`, `skip_msr`; `skip_lr` last (`sdk/src/codegen/config.cpp`) | guest-bound (the usual case) | Enable one flag per codegen+build; A/B scenarios, long session, repro_freeze. `skip_lr` breaks hooks that read `ctx.lr` (E026). setjmp/longjmp handled by codegen, still test save/load and FMV |
+| G1 | Codegen register locality (UnleashedRecomp ships all on, The Darkness all off as a correctness profile): manifest `ctr_as_local`, `xer_as_local`, `reserved_as_local`, `cr_as_local`, `non_argument_as_local`, `non_volatile_as_local`, `skip_msr`; `skip_lr` last (`sdk/src/codegen/config.cpp`) | guest-bound (the usual case) | Enable one flag per codegen+build; A/B scenarios, long session, repro_freeze. `skip_lr` breaks hooks that read `ctx.lr` (E026). setjmp/longjmp handled by codegen, still test save/load and FMV |
 | G2 | Cut guest XDK D3D work (the originals the hooks call) | XDK D3D range > ~15% of render-thread samples | Dirty-mask constant path (skate3 `SetPending_*`), or replace XDK functions whose PM4 the mirror does not need; feed fences per Q-R5. Full A/B |
 | G3 | Native occlusion queries, results one frame late | capture shows occlusion queries AND native draws/frame > legacy draws/frame | Game-visible (it changes what the game submits); compare draw counts and A/B |
 | G4 | Resolve elision (sample the host RT instead of copying) | GPU-bound or `resolve_copy_mb` large at 4K / handheld | Only full-surface, same-format, non-MSAA resolves whose source is not re-rendered before the read; keep the copy path as fallback cvar |
@@ -100,7 +100,9 @@ Evaluation of where these come from: docs/STRATEGY_REVIEW.md.
 | G8 | `ID3D12PipelineLibrary` on top of the PSO records | cold precompile time > ~10 s or driver cache evictions observed | Invalidate on driver/adapter change; records stay the source of truth |
 | G9 | Memory for handhelds: upload ring sized from the measured peak, placed heaps, residency budget | VRAM or sysmem > ~70% of a 6 GB budget | Overflow pages already exist, so a smaller ring is safe; measure `upload_peak_mb` over all scenarios |
 | G10 | 2 frames in flight instead of 3 (latency) | measured input latency is a complaint | Check unlocked frame time and hitches do not regress |
-| G11 | clang PGO on the recompiled code | guest-bound, after G1 | Keep `-ffp-contract=off`; profile on several scenarios, not one; paired runs |
+| G11 | clang PGO on the recompiled code | guest-bound, after G1 | Keep `-ffp-contract=off`; profile on several scenarios, not one; paired runs. Darkness found ThinLTO gave nothing: measure, do not assume |
+| G12 | Host thread placement: guest hardware threads on distinct physical cores (CPU Sets), present thread ABOVE_NORMAL | Present blocks / hitches at loads with cores saturated, or a guest worker sharing an SMT sibling with the engine thread | Scheduling only, guest semantics unchanged; Darkness: priority fixed 1.3 s Present stalls, core mapping gave no gain |
+| G13 | Load-time PSO precompile: at the CreateShader hook, enqueue recorded PSOs using that shader at high priority; optionally hold the game's loading flag until they finish (UnleashedRecomp) | cold precompile at startup too long (thousands of PSOs) or PSOs compiled in play after a level load | Never skip a draw; holding a loading flag needs the engine's flag found per game |
 
 Rejected outright (see STRATEGY_REVIEW.md): reordering/sorting draws, GPU culling of draws
 the game submitted, placeholder PSOs, mapping states to "nearest canonical" PSOs, physical

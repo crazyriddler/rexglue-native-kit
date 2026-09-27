@@ -353,3 +353,62 @@ if (!memexport_used && ShouldSuppressEmulatedDraws()) {
 // copy/resolve path (edram_mode == kCopy)
 if (ShouldSuppressEmulatedDraws() && ShouldSuppressPassAtPitch(pitch)) return true;  // drop resolve too
 ```
+
+## The Darkness Recomp (researched 2026-09-27)
+
+Source: https://github.com/portingpete/The-Darkness-Recomp @ `63cc32545db61c1d4dd0eeaf898f156ddd5ea413`
+(2026-09-27). Re-checked the same day: UnleashedRecomp `cf829a9e` and skate3recomp `f6e0ae87`
+(same commits as above) and rexglue-skate3 `7eb0faf7` for title-update support. The
+generic conclusions of all three are in docs/ANY_GAME_CHECKLIST.md; this section keeps the
+Darkness-specific evidence.
+
+### 0. Key facts
+- XenonRecomp (not ReXGlue) at the revision UnleashedRecomp pins, plus two patches
+  (`tools/patches/`): instruction additions and a corrections patch (vcmp*h record masks
+  0xFF -> 0xFFFF, fnmadd via fma, vctuxs NaN, vpkuwum/vpkuhus destination aliasing,
+  mulhdu record compare, FP record forms rejected until CR1-from-FPSCR is modelled). The
+  kit's ReXGlue codegen already contains the equivalent fixes (checked 2026-09-27; the pack
+  aliasing case with an emulation test), except FP record forms, which it ignores silently.
+- Codegen profile: every register-locality flag **off** ("correctness profile",
+  `config/darkness.toml`), the opposite of UnleashedRecomp.
+- Input: `_uncrypted.xex` + `basefile.exe` produced with xorloser's XexTool; README
+  publishes their SHA-256 as the supported-revision check.
+- Renderer: **engine-level**, D3D11. Captures completed device state and engine draw
+  objects (not PM4), uses the engine's own shader sources transpiled to HLSL
+  (`tools/arb_to_hlsl.py`, `batch_transpile.py`, `compile_world_*.py`). Game-specific.
+
+### 1. Resolution / aspect (RENDERING.md "Display size and ultrawide")
+- Guest video mode set to the display aspect with height <= 720 and width <= 2560, host
+  integer scale 1-3x on RTs/viewports/copies. The engine then builds the Hor+ projection
+  **and** its CPU visibility from the wider mode. Enlarging guest allocations directly
+  overflowed a fixed rectangle descriptor and then exhausted the console texture heap:
+  keep guest sizes within console limits and scale on the host (same principle as the
+  kit's render_scale).
+
+### 2. Performance findings with numbers
+- Present thread at ABOVE_NORMAL: Present blocks of 1.3-1.6 s at level transitions -> worst
+  5 s window < 18 ms at 120 fps.
+- Unbuffered logging: 45-60 ms report blocks every 5 s -> buffered stdout, p99 < 9.2 ms.
+- Descriptor-state cache with fixed-byte keys: blend lookup 312 -> 48 ns (render-thread
+  samples were dominated by state hashing).
+- Transient VB/IB reuse (dynamic buffers, fence-checked reserve): 96.4% reuse.
+- Upload budget 4 MiB/frame with deferred draws (rejected for the kit: drops draws).
+- CPU Sets worker mapping and a 30-thread helper pool: no gain / worse stutter in the
+  measured heavy scene (engine thread at 96-98% of a core). ThinLTO: no gain. Lesson that
+  matches Conan: the frame is bound by the single guest engine thread.
+- Memory: guest C-alias region mapped as 32 views of 16 MiB over one backing store:
+  82 -> 98 fps in the tunnel benchmark (specific to their runtime, not ReXGlue).
+
+### 3. Testing
+64 CTest targets: renderer "contracts" on hardware and WARP with the D3D11 debug layer
+(clears in rectangles, resolves, scale 1/2/3, alpha modes, Darkness Vision stages),
+kernel/dispatcher/audio contracts, synthetic submission benchmarks. Content fingerprint
+of native inputs to catch stale objects after rollbacks.
+
+### 4. Title updates in the other projects
+- skate3: `cmake/ExtractTitleUpdateXexp.py` pulls `default.xexp` (and module `.xexp`) out of
+  the STFS TU package; the manifest's `patched_file_path` points codegen at the staged XEX,
+  with a separate `skate3_tu_functions.toml` (function boundaries differ per revision).
+- UnleashedRecomp: `patch_file_path` / `patched_file_path` in the XenonRecomp config.
+- Kit SDK 0.10: no manifest key, but `UserModule::LoadFromFile` applies a sibling
+  `<xex>p` for codegen and runtime alike (docs/ANY_GAME_CHECKLIST.md §1).
