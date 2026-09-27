@@ -6,6 +6,7 @@
 # Prints PSNR per swap and writes artifacts/captures/<name>_sheet.png
 # (native | xenos | diff x8). Compare by guest swap number, never by time.
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT" || exit 1
+KIT_ENV_QUIET=1 source scripts/dev_env.sh
 N=$1; SCEN=$2; E=$3; S=$4; shift 4
 D=artifacts/captures/$N; mkdir -p "$D"; rm -f "${D:?}"/*
 rm -rf "artifacts/screenshots/${N:?}"

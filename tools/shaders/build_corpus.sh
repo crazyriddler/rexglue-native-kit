@@ -10,8 +10,9 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 DXC_VER="v1.9.2607"; DXC_ZIP="dxc_2026_07_29.zip"
+set +u; KIT_ENV_QUIET=1 source "$ROOT/scripts/dev_env.sh"; set -u
 
-python -c "import xxhash" 2>/dev/null || python -m pip install --user xxhash
+python -c "import xxhash" 2>/dev/null || python -m pip install xxhash
 
 if [ ! -x "$ROOT/tools/dxc/bin/x64/dxc.exe" ]; then
   echo "[corpus] fetching DXC $DXC_VER"
@@ -23,7 +24,6 @@ if [ ! -x "$ROOT/tools/dxc/bin/x64/dxc.exe" ]; then
 fi
 
 [ -f "$ROOT/tools/xenosrecomp/src/XenosRecomp/shader_recompiler.cpp" ] || bash "$ROOT/tools/xenosrecomp/fetch_source.sh"
-set +u; source "$ROOT/scripts/dev_env.sh" >/dev/null; set -u
 cmake -S "$ROOT/tools/xenosrecomp" -B "$ROOT/tools/xenosrecomp/build" -G Ninja \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ >/dev/null
 cmake --build "$ROOT/tools/xenosrecomp/build"

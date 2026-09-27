@@ -24,7 +24,8 @@ artifacts/shaders/raw/
 artifacts/shaders/work/
 bench/userdata_run/
 
-# Tools fetched/built locally
+# Tools fetched/built locally (tools/toolchain: scripts/setup_toolchain.sh)
+tools/toolchain/
 tools/xenosrecomp/build/
 
 # Captures / traces

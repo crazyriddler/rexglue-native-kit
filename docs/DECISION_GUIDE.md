@@ -89,7 +89,7 @@ hang, no enhancement enabled by default.
 | Measuring, bound classification, checklist, gated optimizations | PERFORMANCE_GUIDE.md |
 | A/B, diagnosis, extra validation layers, release gates | VALIDATION_GUIDE.md |
 | cfg, launcher, app hooks, release folder | RELEASE_AND_SETTINGS.md |
-| Toolchain, SDK third-party restore, configure/build | TOOLCHAIN_SETUP.md |
+| Toolchain install (kit-local), SDK third-party code, configure/build | TOOLCHAIN_SETUP.md |
 | Every tool and script, SDK cvars | TOOLS_REFERENCE.md |
 | Recompiler, manifest and hook rules (ReXGlue 0.10.0) | REXGLUE_PORTING_RULES.md |
 | Why some popular optimizations are rejected; proven vs untested | STRATEGY_REVIEW.md |

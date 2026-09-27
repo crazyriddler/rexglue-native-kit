@@ -14,7 +14,7 @@ recompiled function for guest address 0xXXXXXXXX.
 
 | Symptom | Cause | Fix | Ref |
 |---|---|---|---|
-| No clang/ninja/Windows SDK, no admin rights | Fresh PC, VS Installer never completed | Portable LLVM tarball + `xwin` (CRT/SDK MSI payloads unpacked without admin) + `pip install --user ninja`, wired with INCLUDE/LIB and `-fuse-ld=lld` -> `scripts/dev_env.sh` | E001 |
+| No clang/ninja/Windows SDK, no admin rights | Fresh PC, VS Installer never completed | Portable LLVM tarball + `xwin` (CRT/SDK MSI payloads unpacked without admin) + portable Ninja/CMake/Python, all in `tools/toolchain/` by `scripts/setup_toolchain.sh`, wired with INCLUDE/LIB and `-fuse-ld=lld` -> `scripts/dev_env.sh` | E001 |
 | `lzxd.c:1:1: expected identifier` | Git without symlink privilege writes symlinks as text files | `scripts/port/fix_broken_symlinks.py <submodule dir>` (the kit's vendored sdk/thirdparty is already fixed) | E002 |
 | Debug `rexglued.exe`: `ucrtbased.dll` missing | Debug CRT only ships with a full VS install | Use **RelWithDebInfo** for anything that must run; Debug only compiles | E003 |
 | `_mm_shuffle_epi8 requires ssse3` in SDK sources | The game project (outer CMake) did not pass `-march` to the SDK subdirectory | Configure the game with `-march=x86-64-v3 -ffp-contract=off` (release) or at least v2 | E007, EXP-047 |

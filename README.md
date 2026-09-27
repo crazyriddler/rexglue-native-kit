@@ -20,14 +20,20 @@ reblue, skate3recomp, The Darkness Recomp, LostOdysseyRecomp, AC6_recomp and mor
    Keep a pristine copy of the kit as a template.
 2. Put the game in `game/`: `default.xex`, any other `.xex`/`.dll` modules and all data
    folders, as extracted from the disc (see `game/README.md` for title updates).
-3. Set the toolchain paths in `kit.env` (docs/TOOLCHAIN_SETUP.md explains how to install
-   everything without admin rights).
-4. Open Claude Code in the folder and paste `START_PROMPT.md`, or run
+3. Open Claude Code in the folder and paste `START_PROMPT.md`, or run
    `START_CLAUDE_FULL_ACCESS.cmd` (starts Claude Code with that prompt and full permissions).
-5. To continue another day: `RESUME_CLAUDE_FULL_ACCESS.cmd` or paste `RESUME_PROMPT.md`.
+4. To continue another day: `RESUME_CLAUDE_FULL_ACCESS.cmd` or paste `RESUME_PROMPT.md`.
 
 Claude Code works autonomously, records its state in `docs/PROJECT_STATE.md` and reports
 short progress notes in the language you write to it.
+
+**Toolchain: nothing to install by hand.** In phase 0 Claude Code runs
+`scripts/setup_toolchain.sh`, which installs LLVM/Clang, CMake, Ninja, Python, the MSVC CRT +
+Windows SDK (via xwin) and the Visual C++ runtime inside `tools/toolchain/` (~1.1 GB download,
+~4 GB on disk; no admin rights, no Visual Studio, nothing outside the folder). The CRT, SDK and
+runtime are Microsoft software: **starting the kit means you accept Microsoft's license terms**
+for them (https://go.microsoft.com/fwlink/?LinkId=2086102). What you need beforehand: Windows
+10/11 x64 and Claude Code (which already requires Git for Windows / Git Bash).
 
 ## How Claude Code navigates the kit
 
@@ -54,15 +60,15 @@ launcher -> 10 release.
 | `reference/conan/` | The complete worked example: port sources (native renderer, NativeGraphicsSystem, launcher), commented manifest, error log E001-E051, experiment log EXP-001-048 |
 | `tools/` | Benchmark, profiling, capture and image-comparison tools; shader pipeline (patched XenosRecomp, DXC); reverse-engineering tools (`re/xdk_sigs.py`, `re/xdk_layout.py`); release builder |
 | `bench/` | Scripted, reproducible runs; frame-exact A/B; freeze reproduction; optimization baselines |
-| `scripts/` | Toolchain environment, SDK third-party restore, port helpers (XEX decoding, codegen scanners), self-tests (`python -m pytest scripts/tests`) |
+| `scripts/` | Kit-local toolchain install (`setup_toolchain.sh`) and environment (`dev_env.sh`), SDK third-party re-vendoring, port helpers (XEX decoding, codegen scanners), self-tests (`python -m pytest scripts/tests`) |
 | `kit.env` | Per-project configuration read by every script |
 
 ## Requirements
 
-Windows 10/11 x64, Git Bash, portable LLVM/Clang, xwin (MSVC CRT + Windows SDK without Visual
-Studio), Ninja, CMake >= 3.25, Python 3 with numpy, Pillow, xxhash, pycryptodome; optional
-ProcDump, a DbgEng debugger and RenderDoc. Details and no-admin install notes:
-`docs/TOOLCHAIN_SETUP.md`. A DirectX 12 GPU is needed to run and validate the port.
+Windows 10/11 x64, Claude Code with Git for Windows (Git Bash), a DirectX 12 GPU to run and
+validate the port, and network access in phase 0. Everything else is installed inside the kit
+by `scripts/setup_toolchain.sh` (versions and details: `docs/TOOLCHAIN_SETUP.md`); optional
+ProcDump/RenderDoc with `--debug-tools`.
 
 ## What is proven and what depends on the game
 

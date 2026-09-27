@@ -12,12 +12,13 @@
 # be the user's own). Nothing else is written into the folder.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-set -a; source "$ROOT/kit.env"; set +a
+KIT_ENV_QUIET=1 source "$ROOT/scripts/dev_env.sh"
 NAME="${1:-${GAME_NAME}-Native}"
 OUT="$ROOT/release/$NAME"
 BUILD="$ROOT/$PORT_DIR/out/build/$BUILD_REL"
 GAME="$ROOT/$PORT_DIR/game"
-CRT_DIR="$(ls -d $VC_REDIST_GLOB 2>/dev/null | sort | tail -1)"
+if [ -d "$VC_REDIST_GLOB" ]; then CRT_DIR="$VC_REDIST_GLOB"   # kit-local (setup_toolchain.sh)
+else CRT_DIR="$(ls -d $VC_REDIST_GLOB 2>/dev/null | sort | tail -1)"; fi
 
 bash "$ROOT/bench/build.sh" "$BUILD_REL"
 

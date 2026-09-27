@@ -6,7 +6,7 @@
 # name: the user may be playing the release at the same time.
 LIMIT=$1; shift
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-set -a; source "$ROOT/kit.env"; set +a
+KIT_ENV_QUIET=1 source "$ROOT/scripts/dev_env.sh"
 EXE_DIR="${EXE_DIR:-$ROOT/$PORT_DIR/out/build/$BUILD_DEV}"
 export EXE_DIR
 timeout "$LIMIT" "$ROOT/bench/run.sh" "$@"
