@@ -10,7 +10,7 @@ port/out/
 port/generated/
 port/logs/
 sdk/out/
-release/
+/release/
 build/
 .cache/
 __pycache__/

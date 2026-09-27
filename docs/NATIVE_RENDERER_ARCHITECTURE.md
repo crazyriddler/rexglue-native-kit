@@ -154,3 +154,37 @@ shaders/state/constants), `native_skip_ps=<hash>`, `native_skip_draws`, `native_
 (`native_hang_watchdog_s`: all-thread stacks when swaps stop), `d3d_capture_out`,
 `native_dump_textures_dir`, per-pass drawn/skipped stats.
 Rule: no clock queries, logs or scans in per-draw paths unless behind a cvar.
+
+## 7. Invariants (do not "optimize" these away)
+
+The renderer reproduces a console frame whose meaning depends on submission order. These
+rules come from bugs that were fixed on Conan; proposals that break them are rejected in
+docs/STRATEGY_REVIEW.md.
+
+- **Submission order is semantic.** Guest surfaces alias by EDRAM base; a resolve copies
+  what was drawn so far; clears are limited to rects; stencil and blending accumulate. No
+  sorting by PSO/material, no instancing that merges draws across state changes, no moving
+  work to another queue unless the dependency is explicit.
+- **Never drop or substitute a draw the game submitted.** A draw skipped once (cold PSO,
+  missing texture, culling) can break the game permanently (EXP-005: exposure init ->
+  black scene). A missing pipeline or texture is waited for; coverage and precompile make
+  the wait not happen.
+- **No host-side culling of submitted draws.** The game already culls; occlusion queries
+  are game-visible (EXP-013).
+- **State maps exactly.** No "nearest canonical" blend/depth/raster states.
+- **Game-visible semantics** stay: pixel centers, PWL gamma, NaN-as-zero constants, 7e3 HDR
+  with alpha, EDRAM reinterpretation, MSAA sample count of the guest.
+
+## 8. Cheap D3D12 hardening for every port (not in the Conan reference yet)
+
+Generic, low-risk additions to make during phase 6 of the next port (and back-port into
+the reference when it is next built). None changes pixels; confirm with one A/B run.
+
+| Item | Why | How |
+|---|---|---|
+| DRED (auto-breadcrumbs + page-fault reporting) | Device-removed reports with the last GPU operation, always available in Release, instead of the per-draw MARKER_OUT breadcrumbs (opt-in, costly on AMD) | `D3D12GetDebugInterface(ID3D12DeviceRemovedExtendedDataSettings)` before device creation (the SDK creates the device: add it there, document in sdk/KIT_SDK_CHANGES.md); dump `ID3D12DeviceRemovedExtendedData` in the existing device-removed log path; cvar-gated if any cost is measured |
+| PIX event per guest pass | Captures and GPU timing readable by pass name | `PIXBeginEvent/PIXEndEvent` (WinPixEventRuntime header-only markers or `ID3D12GraphicsCommandList::BeginEvent`) in PassScope, only when `native_gpu_pass_timing` or a capture is active |
+| `D3D12_HEAP_FLAG_CREATE_NOT_ZEROED` | No driver clear on surface/resolve/texture creation (level-load hitches) | On committed resources that are fully written before first read (RTs cleared by the game, resolve destinations, uploaded textures). Not on buffers read before a full upload |
+| Root signature 1.1 | Lets the driver assume per-draw CBV data is static while set | `D3D12_VERSIONED_ROOT_SIGNATURE_DESC` 1.1, `DATA_STATIC_WHILE_SET_AT_EXECUTE` on the 3 CBVs, descriptor ranges `DESCRIPTORS_VOLATILE` (the bindless heap changes while bound) |
+| Barrier batching | Buffer uploads issue 2 transitions per buffer per batch | Collect upload copies of a batch first, one barrier array before and after |
+| GPU-based validation run | Catches state/descriptor misuse the debug layer misses | `--d3d12_debug=true` + `SetEnableGPUBasedValidation` on one scenario per milestone (slow; never in benchmarks) |

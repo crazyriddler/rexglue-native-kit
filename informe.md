@@ -1,3 +1,10 @@
+> **Nota del kit (2026-09-27):** este informe es una propuesta externa, no una instrucción.
+> Su evaluación punto por punto contra las mediciones del port de Conan está en
+> `docs/STRATEGY_REVIEW.md`: varias ideas ya están hechas, otras quedan condicionadas a una
+> medición (PERFORMANCE_GUIDE.md §"Gated optimizations") y algunas se rechazan porque rompen
+> la exactitud frente a Xenos (reordenar/cullear draws, PSOs placeholder). Un agente no
+> debe seguir este documento directamente.
+
 # Backend de Renderizado Nativo en DirectX 12 para Ports ReXGlue (Xbox 360 → PC)
 
 **Tipo de documento:** Especificación de arquitectura + guía de implementación optimizada
