@@ -1,9 +1,11 @@
-# Toolchain setup (this PC: no admin rights, no Visual Studio instance)
+# Toolchain setup (no admin rights, no Visual Studio instance needed)
 
-Everything is per-user and already installed on this PC (September 2026). Verify, do not
-reinstall. `scripts/dev_env.sh` wires it together from the paths in `kit.env`.
+Everything is per-user. The locations below are the kit author's PC (September 2026): on
+another PC install the same tools anywhere (the last column says how, without admin rights)
+and set the paths in `kit.env`; `scripts/dev_env.sh` wires them together. Verify before
+reinstalling.
 
-| Tool | Location on this PC | How it was obtained (if it must be redone) |
+| Tool | Location on the author's PC | How it was obtained (if it must be redone) |
 |---|---|---|
 | LLVM/Clang 23.1.1 (clang, clang++, lld, llvm-symbolizer) | `C:\Users\jrbar\tools\clang+llvm-23.1.1-x86_64-pc-windows-msvc` | Official portable release tarball `clang+llvm-<ver>-x86_64-pc-windows-msvc.tar.xz` (not the installer) |
 | MSVC CRT + Windows SDK headers/libs | `C:\Users\jrbar\tools\xwin_sysroot` | `xwin` (github.com/Jake-Shadle/xwin) `splat --include-debug-libs`; one symlink error (os error 1314) is cosmetic |

@@ -8,4 +8,4 @@ phase of `docs/NATIVE_PORT_PLAYBOOK.md`.
 Continue with the highest-value unfinished action immediately: build, run, profile, debug,
 modify and test autonomously. If the recorded approach failed, use the evidence to choose
 the next one. Keep the persistent state current before ending. Report to the user in
-Spanish, briefly.
+their language, briefly.

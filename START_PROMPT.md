@@ -18,6 +18,6 @@ within the safety constraints of CLAUDE.md.
 
 Default to action; when uncertain, investigate or run an experiment instead of asking. Build
 and test every change, record every experiment, keep `docs/PROJECT_STATE.md` ready for a fresh
-session, commit milestones to local git, report to the user in Spanish with short notes.
+session, commit milestones to local git, report to the user in their language with short notes.
 Stop only for a real external blocker (e.g. a missing game file) or at a completed milestone
 with the next actions recorded.

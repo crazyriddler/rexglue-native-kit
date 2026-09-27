@@ -54,7 +54,7 @@ Session start: `docs/PROJECT_STATE.md` (phase, next actions), latest
 12. Modify the SDK fork freely when it blocks progress; document it. Never replace `sdk/`
     with an upstream checkout.
 
-## Safety and environment constraints (this PC and this user)
+## Safety and environment constraints
 - The user may be playing a release build at the same time: never kill processes by image
   name, never capture/close "the first window" of a class. Scripts only touch processes
   started from their own build dir.
@@ -66,8 +66,9 @@ Session start: `docs/PROJECT_STATE.md` (phase, next actions), latest
 - Downloads: GitHub/upstream sources and tools as needed for the engineering work; mention
   large ones (model weights, SDKs) to the user.
 
-## User preferences (the only copy; other documents refer here)
-- Communicate with the user in **Spanish**, short status notes; work autonomously.
+## User preferences (kit defaults; the only copy, other documents refer here)
+- Communicate with the user **in the language they write in** (the kit author writes Spanish),
+  short status notes; work autonomously. Code, docs, logs and commit messages in English.
 - Defaults = the original game (resolution, shadows, the game's MSAA, frame rate, VSync on,
   fullscreen). Enhancements and game-behaviour changes (high fps, ultrawide, FOV) are
   options, off by default.

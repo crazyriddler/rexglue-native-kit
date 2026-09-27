@@ -9,4 +9,4 @@ description: Drive the port continuously when the next step is not explicit, aft
    use the symptom router (§4) before investigating anything already solved.
 3. Record per DECISION_GUIDE §5, commit, repeat. A failed experiment is a result, not a stop.
 4. Stop only for a real external blocker or at a milestone with PROJECT_STATE "Next actions"
-   written; brief Spanish status note to the user.
+   written; brief status note to the user in their language.
