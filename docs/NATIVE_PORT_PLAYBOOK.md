@@ -43,8 +43,8 @@ _research/upstream/     local mirrors: XenosRecomp, reblue(-XenosRecomp), Unleas
    (also exposed as the `<game>_codegen` CMake target).
 6. Copy docs/templates/* to docs/ (PROJECT_STATE, EXPERIMENT_LOG, OPEN_QUESTIONS,
    BENCHMARKS.csv, RENDERER_ANALYSIS, SHADER_CATALOG, PIPELINE_CATALOG) and
-   `port/docs/error_log.md`. `git init` the kit root (the .gitignore excludes game data,
-   builds, artifacts).
+   `port/docs/error_log.md`. `git init` the kit root unless it is already a repository (a kit cloned from GitHub is);
+   the .gitignore excludes game data, builds, artifacts. Commit locally; never push game data.
 7. Decoded image + disassembly for analysis: `python scripts/port/xex_decode.py
    port/game/default.xex port/logs/default_image.bin` (basic compression only; otherwise
    wait for phase 2 and use `--dump_xex_image`), then objdump (GAME_ADAPTATION_GUIDE.md §1).

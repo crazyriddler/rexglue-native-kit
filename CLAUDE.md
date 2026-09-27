@@ -26,8 +26,8 @@ recompiled game + statically linked XDK D3D (untouched)
    `docs/SHADER_PIPELINE.md`, `docs/PERFORMANCE_GUIDE.md`, `docs/VALIDATION_GUIDE.md`,
    `docs/RELEASE_AND_SETTINGS.md`, `docs/TOOLCHAIN_SETUP.md`, `docs/TOOLS_REFERENCE.md`,
    `docs/REXGLUE_PORTING_RULES.md` (codegen/manifest/hook rules for ReXGlue 0.10.0),
-   `docs/UPSTREAM_RESEARCH.md`, `docs/STRATEGY_REVIEW.md` (verdict on the "GPU-driven
-   second-generation" proposal in `informe.md`: classify the bound before optimizing).
+   `docs/UPSTREAM_RESEARCH.md`, `docs/STRATEGY_REVIEW.md` (verdict on a "GPU-driven
+   second-generation" renderer proposal: classify the bound before optimizing).
 5. The worked example: `reference/conan/` (port sources, manifest with commented
    overrides, error_log.md E001-E051, EXPERIMENT_LOG EXP-001-048, RENDERER_ANALYSIS).
 

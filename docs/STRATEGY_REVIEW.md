@@ -1,7 +1,9 @@
-# Strategy review: `informe.md` against the measured Conan port
+# Strategy review: a "second-generation" DX12 backend proposal vs the measured Conan port
 
-> Written 2026-09-27. Input: `informe.md` (an external AI's "second-generation DX12 backend"
-> proposal) and the whole kit (docs, reference renderer, experiment log, SDK fork).
+> Written 2026-09-27. Input: an external AI's "second-generation DX12 backend" proposal
+> (a temporary `informe.md`, since removed from the repo; the § numbers in the table below
+> refer to its sections, and each row restates the proposal so the table stands alone)
+> and the whole kit (docs, reference renderer, experiment log, SDK fork).
 > Output: what to adopt, what to adopt only behind a measurement gate, what to reject and
 > why, plus new items and inconsistencies found in the kit. The adopted items are already
 > merged into PERFORMANCE_GUIDE.md §"Where is the frame bound?" / §"Gated optimizations",
@@ -137,8 +139,8 @@ Ranked by expected gain on a guest-bound port. All are measurement-gated.
 4. `reference/conan/docs/PROJECT_STATE.md` "Next actions" is from before EXP-037..048
    (still mentions validating `resolution_scale`, which was renamed `render_scale`).
    Historical; new ports use `docs/templates/PROJECT_STATE.md`.
-5. `informe.md` lives at the kit root, where a fresh agent may take it as instructions.
-   **Fixed**: a header points here.
+5. The proposal file sat at the kit root, where a fresh agent could take it as
+   instructions. **Resolved**: removed; this review is the only record.
 6. `docs/templates/BENCHMARKS.csv` has no columns for the metrics that gate optimizations.
    **Fixed**: added `guest_ceiling_ms, worker_busy_pct, pso_compiled_in_play,
    resolve_copy_mb, upload_peak_mb, tex_decode_ms` (`scripts/check_kit.ps1` only checks the
@@ -161,3 +163,14 @@ Ranked by expected gain on a guest-bound port. All are measurement-gated.
    renderer-side gated items only if the classification says renderer/GPU bound.
 5. Tooling investments that pay across games: shader numeric harness, capture replay,
    native golden dumps, release gates, `game_profile` consolidation at game #2.
+
+## 6. Proven vs untested (read before trusting a doc line)
+
+| Status | What |
+|---|---|
+| Proven on one game (Conan, XDK 2.0.5632) | Phases 0-10 of the playbook, the reference renderer, NativeGraphicsSystem, PSO precompile, launcher, release tooling, every LESSONS_LEARNED row |
+| Documented, never run | G1-G11 gated optimizations, §8 hardening of NATIVE_RENDERER_ARCHITECTURE, shader numeric harness, native golden dumps, capture replay, scripted release gates, `game_profile` |
+| Expected to differ on the next game | XDK revision (xdk_sigs.py `fuzzy`/`missing` -> semantic discovery), engine pass structure, formats/primitive/packet types Conan never used (log once, implement), MEMEXPORT, 3D texture mips, multiple XEX/DLL modules, 60 fps titles (vblank per frame), shader heuristics keyed by Conan sampler names |
+
+The first time an untested item is used, record it as an EXP entry with numbers and move it
+to "proven" (or record why it was dropped).

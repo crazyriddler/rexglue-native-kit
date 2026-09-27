@@ -10,6 +10,6 @@ description: Phase 0: prepare a new port in the kit (toolchain check, game inven
 4. Fill kit.env (GAME_NAME lowercase, TITLE_ID, GUEST_WIDTH/HEIGHT).
 5. Build the CLI: `cd sdk && cmake --preset win-amd64 && cmake --build out/build/win-amd64 --config Release --target rexglue`.
 6. `mkdir port && mv game port/game`; from port/: `../sdk/out/win-amd64/Release/rexglue.exe init --project-name $GAME_NAME --xex-path game/default.xex --game-root game --project-root . [--scan-dll]`.
-7. Copy docs/templates/* to docs/ and error_log.md to port/docs/; git init + first commit.
+7. Copy docs/templates/* to docs/ and error_log.md to port/docs/; `git init` unless the kit is already a repository; first commit (game data is gitignored, never push it).
 8. Decoded image (scripts/port/xex_decode.py, or later --dump_xex_image) + objdump into port/logs/.
 9. Continue with /codegen-triage.
