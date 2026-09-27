@@ -1,0 +1,29 @@
+// Executable icon. See CMakeLists.txt (added to CONAN_SOURCES). Numeric ID 1
+// (not a symbolic IDI_ name) so launcher_dialog.cpp can load it directly via
+// LoadIconW(..., MAKEINTRESOURCEW(1)) without a resource.h.
+1 ICON "../conan.ico"
+
+// Version information (Task Manager / file properties show "Conan").
+1 VERSIONINFO
+FILEVERSION 0,9,0,0
+PRODUCTVERSION 0,9,0,0
+FILEOS 0x40004
+FILETYPE 0x1
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "FileDescription", "Conan"
+      VALUE "ProductName", "Conan"
+      VALUE "FileVersion", "0.9.0 beta"
+      VALUE "ProductVersion", "0.9.0 beta"
+      VALUE "OriginalFilename", "conan.exe"
+      VALUE "InternalName", "conan"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

@@ -1,0 +1,34 @@
+# Claude research/cache and generated evidence
+_research/upstream/
+artifacts/captures/
+artifacts/profiles/
+artifacts/logs/
+artifacts/screenshots/
+
+# Common build outputs
+build/
+out/
+bin/
+obj/
+.cache/
+
+# GPU capture/profiler outputs
+*.rdc
+*.wpix
+*.nsight-gfx
+*.etl
+*.trace
+
+# Temporary
+*.tmp
+*.bak
+*.old
+
+# Game port has its own nested local git repo
+conan-port/
+Xenia/
+.windbg-symbol-cache/
+.xwin-cache/
+
+# Portable release folders (tools/make_release.sh)
+release/

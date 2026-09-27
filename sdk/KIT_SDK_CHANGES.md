@@ -1,0 +1,61 @@
+# This SDK: ReXGlue v0.10.0 fork used by the native-port kit
+
+Source: `C:\Users\jrbar\rexglue-sdk native-render`, branch `native-render`, commit
+d859ff6 (2026-09-26), on top of ReXGlue v0.10.0 (the original clone at
+`C:\Users\jrbar\rexglue-sdk` is untouched and must stay so). Submodules are vendored
+(no .git); the libmspack/moltenvk/o1heap symlink placeholders are already fixed.
+
+Record every further SDK change here (what, why, which experiment).
+
+## Changes relative to upstream v0.10.0 (by area)
+
+Runtime / performance
+- High-resolution timing: `timeBeginPeriod(1)`, waitable-timer sleeps, vblank worker that
+  waits out the interval and delivers at most one vblank per wake (E049).
+- TimerQueue uses a blocking wait strategy (was spinning ~18% of a core); the vendored
+  disruptorplus `wait_until` argument order fixed (EXP-040).
+- Occlusion queries resolved one frame late, never waiting on the GPU (E050).
+- `clear_memory_page_state` default false (E051); `readback_memexport` default false;
+  primitive processor cache min 4096 indices; quad lists as triangle lists (E048).
+- `vsync` / `unlocked_vblank_rate` cvars live in rexruntime (`graphics_flags.h`) so they
+  exist without the GPU plugin (EXP-036).
+- Present through a frame-latency waitable swap chain (no queue lock across Present,
+  EXP-007); Present(1) without tearing when vsync is on; presents/s log (EXP-037/039).
+- Window size no longer changes the guest video mode (EXP-037). Logging "off" creates
+  no files.
+- Shader pipelines: draws wait for pending pipeline creation (cold-cache black scene,
+  EXP-005).
+
+Audio
+- `UnregisterClient` waits for the client's in-flight callback (level-load hang E036);
+  SubmitFrame drops a frame instead of dereferencing a null driver (E034).
+  Debug cvars `audio_debug_callback_delay_ms`, `audio_unregister_wait`.
+
+Graphics interfaces
+- `IGraphicsSystem::GetGammaRamp256` (native present applies the DC_LUT ramp).
+- GPU swap callback with register file, `bench_screenshot_swaps` (frame-exact A/B).
+- Xenos path: NaN sanitize of constants in cached staging (E041), `gpu_null_draws`.
+
+UI / app
+- `ReXApp::GetWindowTitle()` virtual (default: name + build stamp).
+- `ImGuiDialog::WantsContinuousRepaint()`: idle dialogs no longer force continuous repaint.
+
+Benchmark / diagnostics
+- `autoinput_script` (buttons, sticks, **LT/RT** added in the kit), `bench_exit_after_s`,
+  `bench_screenshot_times/swaps/dir`, `perf_log_csv`, perf counters in Release, bench exit
+  callbacks.
+- In-process sampling profiler (`sample_profile_out`, full stacks + module map,
+  `sample_profile_all_threads`).
+- Thread CPU accounting, WAIT_REG_MEM timing, `gpu_trace_register`.
+
+Kit-only changes (not in the source branch)
+- `thirdparty/CMakeLists.txt`: accepts vendored submodule content without `.git`.
+- `src/ui/rex_app.cpp`: `--dump_xex_image=<file>` writes the loaded (decrypted,
+  decompressed) executable image, any XEX compression.
+- `src/input/input_system.cpp`: autoinput `LT` / `RT` triggers.
+
+## Building
+- As part of a game project (REXSDK_DIR mode): outputs in `sdk/out/win-amd64/`.
+- Standalone CLI: `cmake --preset win-amd64 && cmake --build out/build/win-amd64
+  --config Release --target rexglue` -> `out/win-amd64/Release/rexglue.exe`
+  (after `source ../scripts/dev_env.sh`).

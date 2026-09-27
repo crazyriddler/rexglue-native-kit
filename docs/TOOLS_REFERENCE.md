@@ -1,0 +1,63 @@
+# Tools reference
+
+All scripts read `kit.env` (bash: `source`, Python: `tools/kitcfg.py`). Run from the kit root
+in Git Bash unless noted.
+
+## bench/ (running the game)
+
+| Script | Use |
+|---|---|
+| `bench/build.sh [builddir]` | build game+SDK and sync SDK DLLs into the exe dir (always use it) |
+| `bench/run.sh <name> <script.txt> <exit_s> [--cvar=v ...]` | one scripted run: fresh bench user data, autoinput, perf CSV `artifacts/profiles/<name>.csv`, screenshots dir; `EXE_DIR=` picks the build |
+| `bench/run_safe.sh <limit_s> <run.sh args>` | run.sh with a wall-clock limit; kills only its own process |
+| `bench/ab_multi.sh <name> <scenario> <exit_s> <swaps> [cvars]` | frame-exact native vs Xenos at several swaps -> PSNR + contact sheet |
+| `SCEN=... bench/ab_swap.sh <name> <swap> <exit_s>` | one swap with full dumps |
+| `bench/repro_freeze.sh <runs> <scenario> [cvars]` | hang rate with the watchdog |
+| `SCEN_A=.. SCEN_B=.. bench/opt_baseline.sh <tag>` | frame time (unlocked), hitches, CPU/RAM/GPU power at 60 fps, VRAM |
+| `bench/scenario_*.txt` | autoinput scripts: `<start_ms> <hold_ms> <BUTTON>[+BUTTON]`; buttons A B X Y START BACK UP DOWN LEFT RIGHT LB RB LT RT, sticks LSU/LSD/LSL/LSR RSU/RSD/RSL/RSR; timed from the guest's first input poll. Examples: reference/conan/bench/ |
+| `bench/userdata_template/` | the bench user data root (saves, caches) copied fresh per run |
+
+## tools/ (analysis)
+
+| Tool | Use |
+|---|---|
+| `bench_summary.py <csv> <skip_s> <t0> <t1>` | frame time avg/p50/p95/p99 + per-frame counters |
+| `thread_cpu.py <secs> [exe] [top]` / `thread_cpu.ps1` | per-thread CPU (names) of the running game |
+| `power_probe.py <secs> <delay> <out>` | process CPU + NVIDIA GPU power/util |
+| `mem_probe.ps1 <delay>` | RAM working set/private |
+| `symbolize_profile.py`, `profile_stacks.py <prof> <slot> <func>`, `profile_threads.py` | SDK sampler profiles (`--sample_profile_out`, `--sample_profile_all_threads`) |
+| `native_dump_to_png.py <dir>` | native .raw dumps -> PNG |
+| `ab_diff.py`, `ab_multi.py`, `ab_resolves.py`, `dump_sheet.py`, `grid.py` | image comparison / contact sheets |
+| `capture_window.py <exe> <class> <out.png> [--close] [--open-combo=id] [args]` | capture a window of a process it starts (launcher screenshots) |
+| `stfs_extract.py [--info] [--header f --file-name n] <package> <out_dir>` | extract Xbox 360 STFS packages (CON/LIVE/PIRS: saves, DLC) into the folder layout the content manager expects (`<xuid>/<title>/00000001/<name>/` + `Headers/00000001/<name>.header`). Saves from other regions/editions of the same game usually load |
+| `make_release.sh [name]` | portable release folder |
+| `make_pipeline_base.sh name:secs ...` | record PSOs over scenarios and MERGE into artifacts/shaders/pipelines_base.bin |
+| `shaders/build_corpus.sh` | full shader pipeline (docs/SHADER_PIPELINE.md) |
+| `shaders/gen_projection_regs.py` | per-shader register of the camera matrix constant (edit the constant name per engine) |
+| `re/xdk_sigs.py build|match` | XDK D3D function signatures (docs/GAME_ADAPTATION_GUIDE.md) |
+| `re/disdb.py build`, `re/q.py dis|callers|callees|grep`, `re/gref.py`, `re/pm4scan.py`, `re/ptrtables.py`, `re/callargs.py`, `re/constwriters.py`, `re/fingerprint.py`, `re/apisurface.py`, `re/listrange.py` | generic disassembly analysis (set `CODE_START` to REX_CODE_BASE) |
+| `re/names.py`, `re/statetables.py`, `re/passtable.py`, `re/gamelayer.py`, `re/d3d_symbols.tsv` | Conan-specific names/table addresses: use as templates, update the addresses for the new game |
+| `binutils/powerpc-none-elf-objdump.exe` | PPC disassembler |
+| `dxc/` | DirectX Shader Compiler |
+
+## scripts/
+
+| Script | Use |
+|---|---|
+| `dev_env.sh` | toolchain environment (source it) |
+| `port/xex_decode.py <xex> <out.bin>` | decrypt + decompress (basic compression) to a flat image at 0x82000000 |
+| `port/find_cross_file_gotos.py <generated dir>` | fall-through functions split across files |
+| `port/find_unregistered_after_bctr.py` | candidates for unregistered indirect-call targets (edit its two paths) |
+| `port/fix_broken_symlinks.py <git dir>` | text-file symlinks from Git without privilege |
+| `port/tga_to_dds.py` | convert an existing TGA asset to DDS for a loader that wants .dds |
+| `port/symbolize_offline.ps1`, `port/sample_thread_rip.ps1` | offline RIP symbolization / thread RIP sampling |
+| `collect_environment.ps1`, `init_local_git.ps1`, `new_experiment.ps1`, ... | environment/kit helpers from the original kit |
+
+## SDK cvars added by this fork (useful everywhere)
+
+`--autoinput_script`, `--perf_log_csv`, `--bench_exit_after_s`, `--bench_screenshot_times`,
+`--bench_screenshot_swaps`, `--bench_screenshot_dir`, `--sample_profile_out`,
+`--sample_profile_all_threads`, `--gpu_null_draws`, `--unlocked_vblank_rate`, `--vsync`,
+`--dump_xex_image`, `--audio_debug_callback_delay_ms`, `--audio_unregister_wait`,
+`--d3d12_readback_resolve`, `--mnk_mode`, `--user_data_root`, `--game_data_root`,
+`--log_level`. A cvar passed twice drops all flags.

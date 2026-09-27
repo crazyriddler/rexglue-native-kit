@@ -1,0 +1,38 @@
+# Game data (the user's copy; never commit or upload)
+game/*
+!game/README.md
+port/game/
+data/
+
+# Builds and generated output
+out/
+port/out/
+port/generated/
+port/logs/
+sdk/out/
+release/
+build/
+.cache/
+__pycache__/
+
+# Evidence (large, regenerable)
+artifacts/captures/
+artifacts/profiles/
+artifacts/logs/
+artifacts/screenshots/
+artifacts/shaders/raw/
+artifacts/shaders/work/
+bench/userdata_run/
+
+# Vendored SDK third-party code (400 MB, never edited; record SDK changes in sdk/KIT_SDK_CHANGES.md)
+sdk/thirdparty/*/
+
+# Tools fetched/built locally
+tools/xenosrecomp/src/
+tools/xenosrecomp/build/
+
+# Captures / traces
+*.rdc
+*.wpix
+*.etl
+*.dmp

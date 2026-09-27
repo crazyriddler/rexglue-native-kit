@@ -1,0 +1,21 @@
+# Cold boot -> skip intros -> title (START) -> main menu -> Cargar partida -> slot 1 -> confirm.
+# In-game (save "Chance Meeting") from ~t=36s. Player is left idle afterwards.
+2000 150 A
+4000 150 A
+6000 150 A
+8000 150 A
+10000 150 A
+12000 150 A
+14000 150 A
+16000 150 A
+18000 150 A
+22000 1200 START
+26000 150 DOWN
+27500 150 DOWN
+29000 150 A
+32000 150 A
+35000 150 A
+50000 4000 LSU
+55000 3000 RSR
+59000 4000 LSU
+64000 3000 LSL

@@ -1,0 +1,11 @@
+# start_ms hold_ms buttons  (timed from first guest input poll)
+2000 150 A
+4000 150 A
+6000 150 A
+8000 150 A
+10000 150 A
+12000 150 A
+14000 150 A
+16000 150 A
+18000 150 A
+22000 1200 START

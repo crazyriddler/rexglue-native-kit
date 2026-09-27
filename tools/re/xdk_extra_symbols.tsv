@@ -1,0 +1,9 @@
+0x822DF1D8	D3D_BlockOnFence(dev,fence)
+0x822DE050	D3D_PollGpuProgress(BlockOnFence poll)
+0x822F7408	D3D_LoadShaderLiterals(LOAD_ALU_CONSTANT)
+0x82580358	D3D_ReserveInlineConstants(SET_CONSTANT)
+0x822F9EE0	D3DDevice_Clear
+0x822F9DB8	D3D_InternalClearDraw
+0x822DF548	D3D_RingAllocLargeSegment
+0x822E84C0	D3DDevice_CreateShaderA(container)
+0x822E85D0	D3DDevice_CreateShaderB(container)

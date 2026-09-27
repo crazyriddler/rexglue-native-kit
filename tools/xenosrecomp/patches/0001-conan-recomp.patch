@@ -1,0 +1,682 @@
+diff --git a/XenosRecomp/main.cpp b/XenosRecomp/main.cpp
+index 754198c..25daed3 100644
+--- a/XenosRecomp/main.cpp
++++ b/XenosRecomp/main.cpp
+@@ -131,7 +131,8 @@ int main(int argc, char** argv)
+                 }
+                 else
+                 {
+-                    i += sizeof(uint32_t);
++                    // Conan: 1659 of the 1800 containers in shaders.stx start at offset % 4 == 1.
++                    i += 1;
+                 }
+             }
+ 
+diff --git a/XenosRecomp/shader_common.h b/XenosRecomp/shader_common.h
+index 63c37c9..2963437 100644
+--- a/XenosRecomp/shader_common.h
++++ b/XenosRecomp/shader_common.h
+@@ -4,6 +4,12 @@
+ #define SPEC_CONSTANT_R11G11B10_NORMAL  (1 << 0)
+ #define SPEC_CONSTANT_ALPHA_TEST        (1 << 1)
+ 
++#ifdef CONAN_RECOMP
++    // Alpha test converted to alpha-to-coverage (foliage antialiasing option).
++    #define SPEC_CONSTANT_ALPHA_TO_COVERAGE (1 << 3)
++    #define SPEC_CONSTANT_SOFT_PARTICLE_RGBA (1 << 4)
++    #define SPEC_CONSTANT_SOFT_PARTICLE_ALPHA (1 << 5)
++#endif
+ #ifdef UNLEASHED_RECOMP
+     #define SPEC_CONSTANT_BICUBIC_GI_FILTER (1 << 2)
+     #define SPEC_CONSTANT_ALPHA_TO_COVERAGE (1 << 3)
+@@ -55,6 +61,19 @@ struct PushConstants
+ #define g_SwappedPositions         vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + 320)
+ #define g_SintTexcoords            vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + 324)
+ #define g_ShadowPcfScale           vk::RawBufferLoad<float>(g_PushConstants.SharedConstants + 328)
++#elif defined(CONAN_RECOMP)
++// Conan layout (tools/xenosrecomp/patches): c16-c17 = the 256-bit Xenos bool file
++// (VS 0..127, PS 128..255, LSB-first per dword like SHADER_CONSTANT_BOOL_*),
++// c18 = misc, c19-c26 = the 32 Xenos loop constants (SHADER_CONSTANT_LOOP_00..31:
++// count bits 0-7, start bits 8-15, signed step bits 16-23; VS i0-15 = 0-15,
++// PS i0-15 = 16-31).
++#define g_Booleans(i)              vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + 256 + (i)*4)
++#define g_SwappedTexcoords         vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + 288)
++#define g_HalfPixelOffset          vk::RawBufferLoad<float2>(g_PushConstants.SharedConstants + 292)
++#define g_AlphaThreshold           vk::RawBufferLoad<float>(g_PushConstants.SharedConstants + 300)
++#define g_LoopConstant(i)          vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + 304 + (i)*4)
++#define g_ScreenXform              vk::RawBufferLoad<float4>(g_PushConstants.SharedConstants + 432)
++#define g_SpecConstantsRuntime     vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + 448)
+ #else
+ #define g_Booleans                 vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + 256)
+ #define g_SwappedTexcoords         vk::RawBufferLoad<uint>(g_PushConstants.SharedConstants + 260)
+@@ -83,6 +102,17 @@ struct PushConstants
+     float g_ShadowPcfScale : packoffset(c20.z);
+ 
+ #define g_Booleans(i) (g_BooleansArr[(i) / 4][(i) % 4])
++#elif defined(CONAN_RECOMP)
++#define DEFINE_SHARED_CONSTANTS() \
++    uint4 g_BooleansArr[2] : packoffset(c16); \
++    uint g_SwappedTexcoords : packoffset(c18.x); \
++    float2 g_HalfPixelOffset : packoffset(c18.y); \
++    float g_AlphaThreshold : packoffset(c18.w); \
++    uint4 g_LoopConstantsArr[8] : packoffset(c19); \
++    float4 g_ScreenXform : packoffset(c27);     uint g_SpecConstantsRuntime : packoffset(c28.x); float g_PixelPosScale : packoffset(c28.y); float g_ShadowAtlasTexelScale : packoffset(c28.z); float g_ShadowSoftness : packoffset(c28.w); float2 g_SoftParticleW : packoffset(c29.x); float g_SoftParticleDistance : packoffset(c29.z); float g_SoftParticleTexelScale : packoffset(c29.w); uint g_SoftParticleDepth : packoffset(c30.x);
++
++#define g_Booleans(i) (g_BooleansArr[(i) / 4][(i) % 4])
++#define g_LoopConstant(i) (g_LoopConstantsArr[(i) / 4][(i) % 4])
+ #else
+ #define DEFINE_SHARED_CONSTANTS() \
+     uint g_Booleans : packoffset(c16.x); \
+@@ -95,11 +125,54 @@ uint g_SpecConstants();
+ 
+ #endif
+ 
+-#ifdef REBLUE_RECOMP
++#if defined(REBLUE_RECOMP) || defined(CONAN_RECOMP)
+ // Test Xenos boolean register N in the unified VS(0..127)/PS(128..255) file.
+ #define BOOL_BIT(n) ((g_Booleans((n) / 32u) & (1u << ((n) & 31u))) != 0)
+ #endif
+ 
++#ifdef CONAN_RECOMP
++// xenos::LoopConstant: aL = start + iteration * step.
++// Macros take the 32-bit loop constant value: g_LoopConstant(id), or a literal
++// from the shader's definition table (defi).
++#define LOOP_COUNT(c) ((c) & 0xFFu)
++#define LOOP_START(c) int(((c) >> 8) & 0xFFu)
++#define LOOP_STEP(c)  (int((c) << 8) >> 24)
++#endif
++
++#ifdef CONAN_RECOMP
++// Bit 31 of a texture descriptor index = the fetch constant's RGB sign is GAMMA:
++// Xenos returns linear values, converted with its piecewise-linear curve
++// (xenos::PWLGammaToLinear, applied after filtering like the Xenia/ReXGlue
++// Xenos backend).
++// Bits 16-27 = host scale of a texture rendered larger than its guest size
++// (render_scale resolve targets, 8.8 fixed point, 0 = 1:1): texel offsets and
++// filter weights stay in guest texels, like on Xenos. SRV indices use bits 0-14.
++#define TEX_INDEX(i) ((i) & 0x7FFFu)
++#define TEX_SCALE(i) ((((i) >> 16) & 0xFFFu) ? float(((i) >> 16) & 0xFFFu) / 256.0 : 1.0)
++float3 conanPwlGammaToLinear(float3 g)
++{
++    g = saturate(g);
++    float3 hi = select(g >= 192.0 / 255.0, 8.0 / 1024.0, 4.0 / 1024.0);
++    float3 lo = select(g >= 64.0 / 255.0, 2.0 / 1024.0, 1.0 / 1024.0);
++    float3 scale = select(g >= 96.0 / 255.0, hi, lo);
++    float3 offset = select(g >= 96.0 / 255.0, select(g >= 192.0 / 255.0, -1024.0, -256.0),
++                           select(g >= 64.0 / 255.0, -64.0, 0.0));
++    float3 l = g * ((255.0 * 1024.0) * scale) + offset;
++    l += trunc(l * scale);
++    return l * (1.0 / 1023.0);
++}
++float4 conanGamma(uint resourceDescriptorIndex, float4 value)
++{
++    if (resourceDescriptorIndex & 0x80000000u)
++        value.rgb = conanPwlGammaToLinear(value.rgb);
++    return value;
++}
++#else
++#define TEX_INDEX(i) (i)
++#define TEX_SCALE(i) 1.0
++#define conanGamma(i, v) (v)
++#endif
++
+ Texture2D<float4> g_Texture2DDescriptorHeap[] : register(t0, space0);
+ Texture3D<float4> g_Texture3DDescriptorHeap[] : register(t0, space1);
+ TextureCube<float4> g_TextureCubeDescriptorHeap[] : register(t0, space2);
+@@ -112,23 +185,38 @@ uint2 getTexture2DDimensions(Texture2D<float4> texture)
+     return dimensions;
+ }
+ 
++// Texel grid the guest shader addresses (the guest texture size).
++float2 getGuestTexture2DDimensions(uint resourceDescriptorIndex, Texture2D<float4> texture)
++{
++    return float2(getTexture2DDimensions(texture)) / TEX_SCALE(resourceDescriptorIndex);
++}
++
++float4 tfetch2DBicubic(uint resourceDescriptorIndex, uint samplerDescriptorIndex, float2 texCoord, float2 offset);
++
+ float4 tfetch2D(uint resourceDescriptorIndex, uint samplerDescriptorIndex, float2 texCoord, float2 offset)
+ {
+-    Texture2D<float4> texture = g_Texture2DDescriptorHeap[resourceDescriptorIndex];
+-    return texture.Sample(g_SamplerDescriptorHeap[samplerDescriptorIndex], texCoord + offset / getTexture2DDimensions(texture));
++#ifdef CONAN_RECOMP
++    // Bit 28: smooth (cubic B-spline) magnification, set by the host for small
++    // textures of blended effects (particles, glows) - bilinear magnification
++    // of those shows diamond/block patterns at high render resolutions.
++    if (resourceDescriptorIndex & 0x10000000u)
++        return conanGamma(resourceDescriptorIndex, tfetch2DBicubic(resourceDescriptorIndex, samplerDescriptorIndex, texCoord, offset));
++#endif
++    Texture2D<float4> texture = g_Texture2DDescriptorHeap[TEX_INDEX(resourceDescriptorIndex)];
++    return conanGamma(resourceDescriptorIndex, texture.Sample(g_SamplerDescriptorHeap[samplerDescriptorIndex], texCoord + offset / getGuestTexture2DDimensions(resourceDescriptorIndex, texture)));
+ }
+ 
+ float2 getWeights2D(uint resourceDescriptorIndex, uint samplerDescriptorIndex, float2 texCoord, float2 offset)
+ {
+-    Texture2D<float4> texture = g_Texture2DDescriptorHeap[resourceDescriptorIndex];
+-    return select(isnan(texCoord), 0.0, frac(texCoord * getTexture2DDimensions(texture) + offset - 0.5));
++    Texture2D<float4> texture = g_Texture2DDescriptorHeap[TEX_INDEX(resourceDescriptorIndex)];
++    return select(isnan(texCoord), 0.0, frac(texCoord * getGuestTexture2DDimensions(resourceDescriptorIndex, texture) + offset - 0.5));
+ }
+ 
+ #ifdef REBLUE_RECOMP
+ // Bilinear-filtered shadow compare over the four neighboring depth texels.
+ float shadowCmp2D(uint resourceDescriptorIndex, float2 texCoord, float ref)
+ {
+-    Texture2D<float4> texture = g_Texture2DDescriptorHeap[resourceDescriptorIndex];
++    Texture2D<float4> texture = g_Texture2DDescriptorHeap[TEX_INDEX(resourceDescriptorIndex)];
+     int2 dimensions = int2(getTexture2DDimensions(texture));
+     float2 coord = texCoord * dimensions - 0.5;
+     float2 weights = frac(coord);
+@@ -186,9 +274,9 @@ float h1(float a)
+ 
+ float4 tfetch2DBicubic(uint resourceDescriptorIndex, uint samplerDescriptorIndex, float2 texCoord, float2 offset)
+ {
+-    Texture2D<float4> texture = g_Texture2DDescriptorHeap[resourceDescriptorIndex];
++    Texture2D<float4> texture = g_Texture2DDescriptorHeap[TEX_INDEX(resourceDescriptorIndex)];
+     SamplerState samplerState = g_SamplerDescriptorHeap[samplerDescriptorIndex];
+-    uint2 dimensions = getTexture2DDimensions(texture);
++    float2 dimensions = getGuestTexture2DDimensions(resourceDescriptorIndex, texture);
+     
+     float x = texCoord.x * dimensions.x + offset.x;
+     float y = texCoord.y * dimensions.y + offset.y;
+@@ -218,7 +306,7 @@ float4 tfetch2DBicubic(uint resourceDescriptorIndex, uint samplerDescriptorIndex
+ 
+ float4 tfetch3D(uint resourceDescriptorIndex, uint samplerDescriptorIndex, float3 texCoord)
+ {
+-    return g_Texture3DDescriptorHeap[resourceDescriptorIndex].Sample(g_SamplerDescriptorHeap[samplerDescriptorIndex], texCoord);
++    return conanGamma(resourceDescriptorIndex, g_Texture3DDescriptorHeap[TEX_INDEX(resourceDescriptorIndex)].Sample(g_SamplerDescriptorHeap[samplerDescriptorIndex], texCoord));
+ }
+ 
+ struct CubeMapData
+@@ -236,7 +324,7 @@ struct CubeMapData
+ 
+ float4 tfetchCube(uint resourceDescriptorIndex, uint samplerDescriptorIndex, float3 texCoord, inout CubeMapData cubeMapData)
+ {
+-    return g_TextureCubeDescriptorHeap[resourceDescriptorIndex].Sample(g_SamplerDescriptorHeap[samplerDescriptorIndex], cubeMapData.cubeMapDirections[texCoord.z]);
++    return conanGamma(resourceDescriptorIndex, g_TextureCubeDescriptorHeap[TEX_INDEX(resourceDescriptorIndex)].Sample(g_SamplerDescriptorHeap[samplerDescriptorIndex], cubeMapData.cubeMapDirections[texCoord.z]));
+ }
+ 
+ #ifdef REBLUE_RECOMP
+@@ -320,7 +408,7 @@ float4 max4(float4 src0)
+ 
+ float2 getPixelCoord(uint resourceDescriptorIndex, float2 texCoord)
+ {
+-    return getTexture2DDimensions(g_Texture2DDescriptorHeap[resourceDescriptorIndex]) * texCoord;
++    return getTexture2DDimensions(g_Texture2DDescriptorHeap[TEX_INDEX(resourceDescriptorIndex)]) * texCoord;
+ }
+ 
+ float computeMipLevel(float2 pixelCoord)
+diff --git a/XenosRecomp/shader_recompiler.cpp b/XenosRecomp/shader_recompiler.cpp
+index feaa90b..52a3314 100644
+--- a/XenosRecomp/shader_recompiler.cpp
++++ b/XenosRecomp/shader_recompiler.cpp
+@@ -13,6 +13,20 @@ static constexpr char SWIZZLES[] =
+     '_'
+ };
+ 
++
++// CONAN_RECOMP: relative constant operands are emitted through CONST_REL()
++// using the ucode.h src_const_is_addressed() slot rules, so the legacy
++// per-operand const0Relative handling below is disabled.
++#ifdef CONAN_RECOMP
++#define LEGACY_CONST_REL(instr) false
++#define LEGACY_CONST_REL_ANY(instr) false
++#define PS_FLOAT_CONSTANT_COUNT 256
++#else
++#define LEGACY_CONST_REL(instr) ((instr).const0Relative)
++#define LEGACY_CONST_REL_ANY(instr) ((instr).const0Relative || (instr).const1Relative)
++#define PS_FLOAT_CONSTANT_COUNT 224
++#endif
++
+ static constexpr const char* USAGE_TYPES[] =
+ {
+     "float4", // POSITION
+@@ -292,6 +306,16 @@ void ShaderRecompiler::recompile(const TextureFetchInstruction& instr, bool bicu
+     if (instr.opcode != FetchOpcode::TextureFetch && instr.opcode != FetchOpcode::GetTextureWeights)
+         return;
+ 
++#ifdef CONAN_RECOMP
++    // Per-instruction filter overrides (3 = use the fetch constant; aniso 7 =
++    // use the fetch constant): collected by tools/shaders/build_catalog.py into
++    // the renderer's sampler override table.
++    if (instr.opcode == FetchOpcode::TextureFetch)
++        out += fmt::format("// conan_tfetch slot={} mag={} min={} mip={} aniso={}\n",
++            uint32_t(instr.constIndex), uint32_t(instr.magFilter), uint32_t(instr.minFilter),
++            uint32_t(instr.mipFilter), uint32_t(instr.anisoFilter));
++#endif
++
+     if (instr.isPredicated)
+     {
+         indent();
+@@ -331,7 +355,7 @@ void ShaderRecompiler::recompile(const TextureFetchInstruction& instr, bool bicu
+         constNamePtr = constName.c_str();
+     }
+ 
+-#ifdef UNLEASHED_RECOMP
++#if defined(UNLEASHED_RECOMP) || defined(CONAN_RECOMP)
+     if (instr.constIndex == 0 && instr.dimension == TextureDimension::Texture2D)
+     {
+         indent();
+@@ -550,6 +574,27 @@ void ShaderRecompiler::recompile(const AluInstruction& instr)
+ 
+             std::string regFormatted;
+ 
++#ifdef CONAN_RECOMP
++            bool constRelative = false;
++            if (!select)
++            {
++                // ucode.h AluInstruction::src_const_is_addressed(): operand 1 -> const_0_rel;
++                // operand 2 -> const_0_rel if src1 is a temp, else const_1_rel; operand 3
++                // (incl. the mulsc/addsc/subsc constant) -> const_0_rel if src1 and src2
++                // are temps, else const_1_rel.
++                if (operand == VECTOR_0)
++                    constRelative = instr.const0Relative;
++                else if (operand == VECTOR_1)
++                    constRelative = instr.src1Select ? instr.const0Relative : instr.const1Relative;
++                else
++                    constRelative = (instr.src1Select && instr.src2Select) ? instr.const0Relative : instr.const1Relative;
++            }
++            if (constRelative)
++            {
++                regFormatted = fmt::format("CONST_REL({} + {})", reg, instr.constAddressRegisterRelative ? "a0" : "aL");
++            }
++            else
++#endif
+             if (select)
+             {
+                 regFormatted = fmt::format("r{}", reg);
+@@ -572,18 +617,18 @@ void ShaderRecompiler::recompile(const AluInstruction& instr)
+                     #endif
+                         {
+                             regFormatted = fmt::format("{}({}{})", constantName,
+-                                reg - findResult->second->registerIndex, instr.const0Relative ? (instr.constAddressRegisterRelative ? " + a0" : " + aL") : "");
++                                reg - findResult->second->registerIndex, LEGACY_CONST_REL(instr) ? (instr.constAddressRegisterRelative ? " + a0" : " + aL") : "");
+                         }
+                     }
+                     else
+                     {
+-                        assert(!instr.const0Relative && !instr.const1Relative);
++                        assert(!LEGACY_CONST_REL_ANY(instr));
+                         regFormatted = constantName;
+                     }
+                 }
+                 else
+                 {
+-                    assert(!instr.const0Relative && !instr.const1Relative);
++                    assert(!LEGACY_CONST_REL_ANY(instr));
+                     regFormatted = fmt::format("c{}", reg);
+                 }
+             }
+@@ -1108,7 +1153,7 @@ void ShaderRecompiler::recompile(const AluInstruction& instr)
+             break;
+ 
+         case AluScalarOpcode::SetpInv:
+-#ifdef REBLUE_RECOMP
++#if defined(REBLUE_RECOMP) || defined(CONAN_RECOMP)
+             // PRED_SETINV: src==1 -> 0, src==0 -> 1, else passthrough.
+             print("{0} == 1.0 ? 0.0 : ({0} == 0.0 ? 1.0 : {0})", op(SCALAR_0));
+ #else
+@@ -1335,7 +1380,7 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+ 
+             if (constantInfo->registerCount > 1)
+             {
+-                uint32_t tailCount = (isPixelShader ? 224 : 256) - constantInfo->registerIndex;
++                uint32_t tailCount = (isPixelShader ? PS_FLOAT_CONSTANT_COUNT : 256) - constantInfo->registerIndex;
+ 
+                 println("#define {}(INDEX) select((INDEX) < {}, vk::RawBufferLoad<float4>(g_PushConstants.{}ShaderConstants + ({} + min(INDEX, {})) * 16, 0x10), 0.0)",
+                     constantName, tailCount, shaderName, constantInfo->registerIndex.get(), tailCount - 1);
+@@ -1397,8 +1442,39 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+     }
+ #endif
+ 
++#ifdef CONAN_RECOMP
++    println("#define CONST_REL(INDEX) select((uint)(INDEX) < 256, vk::RawBufferLoad<float4>(g_PushConstants.{}ShaderConstants + min((uint)(INDEX), 255) * 16, 0x10), 0.0)",
++        isPixelShader ? "Pixel" : "Vertex");
++#endif
++
+     out += "\n#else\n\n";
+ 
++#ifdef CONAN_RECOMP
++    // The whole 256-entry float constant file is one array so relative
++    // addressing (a0/aL) can reach any register, named or not, and aliased
++    // constant-table entries never overlap in the cbuffer.
++    {
++        const char* stageName = isPixelShader ? "Pixel" : "Vertex";
++        println("cbuffer {}ShaderConstants : register(b{}, space4)", stageName, isPixelShader ? 1 : 0);
++        out += "{\n";
++        println("\tfloat4 g_{}ShaderConstantsArr[256] : packoffset(c0);", stageName);
++        out += "};\n\n";
++        println("#define CONST_REL(INDEX) select((uint)(INDEX) < 256, g_{}ShaderConstantsArr[min((uint)(INDEX), 255)], 0.0)", stageName);
++        for (uint32_t i = 0; i < constantTableContainer->constantTable.constants; i++)
++        {
++            const auto constantInfo = reinterpret_cast<const ConstantInfo*>(
++                constantTableData + constantTableContainer->constantTable.constantInfo + i * sizeof(ConstantInfo));
++            if (constantInfo->registerSet != RegisterSet::Float4)
++                continue;
++            const char* constantName = reinterpret_cast<const char*>(constantTableData + constantInfo->name);
++            if (constantInfo->registerCount > 1)
++                println("#define {}(INDEX) CONST_REL({} + (INDEX))", constantName, constantInfo->registerIndex.get());
++            else
++                println("#define {} g_{}ShaderConstantsArr[{}]", constantName, stageName, constantInfo->registerIndex.get());
++        }
++        out += "\n";
++    }
++#else
+     println("cbuffer {}ShaderConstants : register(b{}, space4)", isPixelShader ? "Pixel" : "Vertex", isPixelShader ? 1 : 0);
+     out += "{\n";
+ 
+@@ -1427,13 +1503,14 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+ 
+             if (constantInfo->registerCount > 1)
+             {
+-                uint32_t tailCount = (isPixelShader ? 224 : 256) - constantInfo->registerIndex;
++                uint32_t tailCount = (isPixelShader ? PS_FLOAT_CONSTANT_COUNT : 256) - constantInfo->registerIndex;
+                 println("#define {0}(INDEX) select((INDEX) < {1}, {0}[min(INDEX, {2})], 0.0)", constantName, tailCount, tailCount - 1);
+             }
+         }
+     }
+ 
+     out += "};\n\n";
++#endif
+ 
+     out += "cbuffer SharedConstants : register(b2, space4)\n";
+     out += "{\n";
+@@ -1487,7 +1564,7 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+         if (constantInfo->registerSet == RegisterSet::Bool)
+         {
+             const char* constantName = reinterpret_cast<const char*>(constantTableData + constantInfo->name);
+-#ifdef REBLUE_RECOMP
++#if defined(REBLUE_RECOMP) || defined(CONAN_RECOMP)
+             // Key named bools by the unified VS(0..127)/PS(128..255) bit so CF tests (also unified) resolve them.
+             const uint32_t unifiedBit = uint32_t(constantInfo->registerIndex) + (isPixelShader ? 128u : 0u);
+             println("\t#define {} BOOL_BIT({})", constantName, unifiedBit);
+@@ -1597,7 +1674,7 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+         }
+     #endif
+ 
+-        out += "\tout float4 oPos : SV_Position";
++        out += "\tout precise float4 oPos : SV_Position";
+ 
+         for (auto& [usage, usageIndex] : INTERPOLATORS)
+             print(",\n\tout float4 o{0}{1} : {2}{1}", USAGE_VARIABLES[uint32_t(usage)], usageIndex, USAGE_SEMANTICS[uint32_t(usage)]);
+@@ -1621,6 +1698,12 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+     }
+ #endif
+ 
++#ifdef CONAN_RECOMP
++    bool hasShadowAtlas = false;
++    std::vector<uint32_t> atlasPcfRegs;  // literal registers holding PCF tap offsets
++    for (auto& [reg, name] : samplers)
++        hasShadowAtlas |= strcmp(name, "g_ShadowMapTextureAtlas") == 0;
++#endif
+     if (shaderContainer->definitionTableOffset != NULL)
+     {
+         auto definitionTable = reinterpret_cast<const DefinitionTable*>(shaderData + shaderContainer->definitionTableOffset);
+@@ -1663,6 +1746,36 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+                     definition->registerIndex + i - (isPixelShader ? 256 : 0),
+                     shadowKernelComponent(value[0].get()), shadowKernelComponent(value[1].get()),
+                     shadowKernelComponent(value[2].get()), shadowKernelComponent(value[3].get()));
++#elif defined(CONAN_RECOMP)
++                // Conan: the shadow-atlas receivers (sampler g_ShadowMapTextureAtlas)
++                // bake their rotated-grid PCF tap-center offsets as literals in
++                // 4096-texel atlas UV units (+-0.25..1.5 / 4096). With the atlas
++                // rendered at shadow_quality x, scale them by g_ShadowAtlasTexelScale
++                // (SharedConstants c28.z = 1 / scale) so the whole kernel (centers +
++                // bilinear taps, which use the host texel grid for this texture)
++                // keeps its shape at the finer resolution. Identity at scale 1.
++                bool atlasPcfOffsets = false;
++                if (isPixelShader && hasShadowAtlas)
++                {
++                    bool anyNonZero = false, allKernel = true;
++                    for (int c = 0; c < 4; c++)
++                    {
++                        uint32_t u = value[c].get();
++                        float f;
++                        memcpy(&f, &u, sizeof(f));
++                        float quarters = f * 4096.0f * 4.0f;
++                        if (f != 0.0f)
++                            anyNonZero = true;
++                        if (!(quarters >= -8.0f && quarters <= 8.0f) || quarters != float(int(quarters)))
++                            allKernel = false;
++                    }
++                    atlasPcfOffsets = anyNonZero && allKernel;
++                }
++                if (atlasPcfOffsets)
++                    atlasPcfRegs.push_back(definition->registerIndex + i - 256);
++                println("\tfloat4 c{} = asfloat(uint4(0x{:X}, 0x{:X}, 0x{:X}, 0x{:X})){};",
++                    definition->registerIndex + i - (isPixelShader ? 256 : 0), value[0].get(), value[1].get(), value[2].get(), value[3].get(),
++                    atlasPcfOffsets ? " * g_ShadowAtlasTexelScale" : "");
+ #else
+                 println("\tfloat4 c{} = asfloat(uint4(0x{:X}, 0x{:X}, 0x{:X}, 0x{:X}));",
+                     definition->registerIndex + i - (isPixelShader ? 256 : 0), value[0].get(), value[1].get(), value[2].get(), value[3].get());
+@@ -1691,6 +1804,9 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+                 };
+ 
+                 value = definition->values[i].get();
++#ifdef CONAN_RECOMP
++                literalLoopConstants[(definition->registerIndex - 8992) / 4 + i] = value;
++#endif
+ 
+                 println("\tint4 i{} = int4({}, {}, {}, {});",
+                     (definition->registerIndex - 8992) / 4 + i, x, y, z, w);
+@@ -1702,6 +1818,26 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+         out += "\n";
+     }
+ 
++#ifdef CONAN_RECOMP
++    // Shadow smoothing (host option, SharedConstants c28.w g_ShadowSoftness):
++    // rotate the atlas PCF tap-center offsets by a per-pixel angle
++    // (interleaved gradient noise) and widen them by g_ShadowSoftness. The
++    // regular 2x2-bilinear staircase along shadow-map texels becomes a fine,
++    // stable grain; 0 = the game's fixed kernel.
++    if (!atlasPcfRegs.empty())
++    {
++        out += "\t[branch] if (g_ShadowSoftness > 0.0)\n\t{\n";
++        out += "\t\tfloat conanAngle = 6.2831853 * frac(52.9829189 * frac(dot(floor(iPos.xy), float2(0.06711056, 0.00583715))));\n";
++        out += "\t\tfloat2 conanCS = float2(cos(conanAngle), sin(conanAngle)) * g_ShadowSoftness;\n";
++        for (uint32_t reg : atlasPcfRegs)
++        {
++            println("\t\tc{0} = float4(c{0}.x * conanCS.x - c{0}.y * conanCS.y, c{0}.x * conanCS.y + c{0}.y * conanCS.x, "
++                    "c{0}.z * conanCS.x - c{0}.w * conanCS.y, c{0}.z * conanCS.y + c{0}.w * conanCS.x);", reg);
++        }
++        out += "\t}\n\n";
++    }
++#endif
++
+     bool printedRegisters[32]{};
+ 
+     uint32_t interpolatorCount = (shader->interpolatorInfo >> 5) & 0x1F;
+@@ -1733,7 +1869,7 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+     #if defined(UNLEASHED_RECOMP)
+         if (!hasMtxProjection)
+             out += "\toPos = 0.0;\n";
+-    #elif defined(REBLUE_RECOMP)
++    #elif defined(REBLUE_RECOMP) || defined(CONAN_RECOMP)
+         // Always define SV_Position so a skipped position-write block doesn't leave it undef.
+         out += "\toPos = 0.0;\n";
+     #endif
+@@ -1751,7 +1887,11 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+             print("\tfloat4 r{} = ", i);
+             if (isPixelShader && i == ((shader->fieldC >> 8) & 0xFF))
+             {
+-                out += "float4((iPos.xy - 0.5) * float2(iFace ? 1.0 : -1.0, 1.0), 0.0, 0.0);\n";
++                // Conan: render targets may be rendered at a multiple of the guest
++                // resolution; g_PixelPosScale (1 / scale) maps host pixels back to
++                // guest pixel coordinates.
++                out += "\n#ifdef CONAN_RECOMP\n\t\tfloat4((iPos.xy * g_PixelPosScale - 0.5) * float2(iFace ? 1.0 : -1.0, 1.0), 0.0, 0.0);\n#else\n";
++                out += "\t\tfloat4((iPos.xy - 0.5) * float2(iFace ? 1.0 : -1.0, 1.0), 0.0, 0.0);\n#endif\n";
+             }
+         #ifdef UNLEASHED_RECOMP
+             else if (!isPixelShader && hasIndexCount && i == 0)
+@@ -1772,7 +1912,7 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+     out += "\tfloat ps = 0.0;\n";
+     if (isPixelShader)
+     {
+-#ifdef UNLEASHED_RECOMP
++#if defined(UNLEASHED_RECOMP) || defined(CONAN_RECOMP)
+         out += "\tfloat2 pixelCoord = 0.0;\n";
+ #endif
+         out += "\tCubeMapData cubeMapData = (CubeMapData)0;\n";
+@@ -2088,7 +2228,7 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+                 address = cfInstr.condExec.address;
+                 count = cfInstr.condExec.count;
+                 sequence = cfInstr.condExec.sequence;
+-#ifdef REBLUE_RECOMP
++#if defined(REBLUE_RECOMP) || defined(CONAN_RECOMP)
+                 shouldReturn = (cfInstr.opcode == ControlFlowOpcode::CondExecEnd ||
+                                 cfInstr.opcode == ControlFlowOpcode::CondExecPredCleanEnd);
+                 // Gate the block on its boolean constant (Xenos cexec bN / cexec !bN); baseline ran it unconditionally.
+@@ -2121,6 +2261,22 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+                 if (simpleControlFlow)
+                 {
+                     indent();
++                #ifdef CONAN_RECOMP
++                    // xenos::LoopConstant semantics: count iterations, aL = start + i * step,
++                    // aL restored after the loop (loop stack).
++                    const uint32_t loopIndex = loopCounter++;
++                    loopStack.push_back(loopIndex);
++                    println("int aLSave{} = aL;", loopIndex);
++                    indent();
++                    println("uint loopConst{} = {};", loopIndex, loopConstantExpr(cfInstr.loopStart.loopId));
++                    indent();
++                    println("[loop] for (uint loopIt{0} = 0; loopIt{0} < LOOP_COUNT(loopConst{0}); loopIt{0}++)", loopIndex);
++                    indent();
++                    out += "{\n";
++                    ++indentation;
++                    indent();
++                    println("aL = LOOP_START(loopConst{0}) + int(loopIt{0}) * LOOP_STEP(loopConst{0});", loopIndex);
++                #else
+                 #ifdef UNLEASHED_RECOMP
+                     print("[unroll] ");
+                 #endif
+@@ -2128,24 +2284,49 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+                     indent();
+                     out += "{\n";
+                     ++indentation;
++                #endif
+                 }
+                 else 
+                 {
++                #ifdef CONAN_RECOMP
++                    // Unstructured (switch(pc)) loops: single-level only; aL doubles as the
++                    // iterator base. Flagged by the catalog (structured=0 + loop).
++                    println("\t\t\taL = LOOP_START({});", loopConstantExpr(cfInstr.loopStart.loopId));
++                #else
+                     out += "\t\t\taL = 0;\n";
++                #endif
+                 }
+                 break;
+ 
+             case ControlFlowOpcode::LoopEnd:
+                 if (simpleControlFlow)
+                 {
++                #ifdef CONAN_RECOMP
++                    if (cfInstr.loopEnd.isPredicatedBreak)
++                    {
++                        indent();
++                        println("if ({}p0) break;", cfInstr.loopEnd.condition ? "" : "!");
++                    }
++                #endif
+                     --indentation;
+                     indent();
+                     out += "}\n";
++                #ifdef CONAN_RECOMP
++                    indent();
++                    println("aL = aLSave{};", loopStack.back());
++                    loopStack.pop_back();
++                #endif
+                 }
+                 else
+                 {
++                #ifdef CONAN_RECOMP
++                    println("\t\t\taL += LOOP_STEP({});", loopConstantExpr(cfInstr.loopEnd.loopId));
++                    println("\t\t\tif (uint((aL - LOOP_START({0})) / max(LOOP_STEP({0}), 1)) < LOOP_COUNT({0}){1})", loopConstantExpr(cfInstr.loopEnd.loopId),
++                        cfInstr.loopEnd.isPredicatedBreak ? (cfInstr.loopEnd.condition ? " && !p0" : " && p0") : "");
++                #else
+                     out += "\t\t\t++aL;\n";
+                     println("\t\t\tif (aL < i{}.x)", uint32_t(cfInstr.loopEnd.loopId));
++                #endif
+                     out += "\t\t\t{\n";
+                     println("\t\t\t\tpc = {};", uint32_t(cfInstr.loopEnd.address));
+                     out += "\t\t\t\tcontinue;\n";
+@@ -2174,7 +2355,7 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+                     }
+                     else
+                     {
+-#ifdef REBLUE_RECOMP
++#if defined(REBLUE_RECOMP) || defined(CONAN_RECOMP)
+                         // Bools expand to BOOL_BIT(N) expressions; negate when the jump fires on a clear bit.
+                         const bool jumpIfSet = cfInstr.condJmp.condition ^ simpleControlFlow;
+                         auto findResult = boolConstants.find(cfInstr.condJmp.boolAddress);
+@@ -2286,6 +2467,26 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+             {
+                 if (isPixelShader)
+                 {
++                #ifdef CONAN_RECOMP
++                    // Soft particles (host option): fade blended effects near
++                    // the scene surface behind them, from the resolved scene
++                    // depth. View depth w: 1 / w = z * g_SoftParticleW.x +
++                    // g_SoftParticleW.y (the w column of the game's inverse
++                    // view-projection). Bit 4 fades rgba (premultiplied /
++                    // additive blends), bit 5 alpha only (SRC_ALPHA blends).
++                    indent();
++                    out += "[branch] if (g_SpecConstants() & (SPEC_CONSTANT_SOFT_PARTICLE_RGBA | SPEC_CONSTANT_SOFT_PARTICLE_ALPHA))";
++                    indent();
++                    out += '{';
++                    indent();
++                    out += "\tfloat conanSceneZ = g_Texture2DDescriptorHeap[g_SoftParticleDepth].Load(int3(iPos.xy * g_SoftParticleTexelScale, 0)).x;\n";
++                    indent();
++                    out += "\tfloat conanFade = saturate((rcp(conanSceneZ * g_SoftParticleW.x + g_SoftParticleW.y) - rcp(iPos.z * g_SoftParticleW.x + g_SoftParticleW.y)) / g_SoftParticleDistance);\n";
++                    indent();
++                    out += "\tif (g_SpecConstants() & SPEC_CONSTANT_SOFT_PARTICLE_RGBA) oC0 *= conanFade; else oC0.w *= conanFade;\n";
++                    indent();
++                    out += '}';
++                #endif
+                     specConstantsMask |= SPEC_CONSTANT_ALPHA_TEST;
+ 
+                     indent();
+@@ -2299,7 +2500,7 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+                     indent();
+                     out += "}";
+ 
+-                #ifdef UNLEASHED_RECOMP
++                #if defined(UNLEASHED_RECOMP) || defined(CONAN_RECOMP)
+                     specConstantsMask |= SPEC_CONSTANT_ALPHA_TO_COVERAGE;
+ 
+                     indent();
+@@ -2322,6 +2523,9 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
+                     if (!hasMtxProjection)
+                 #endif
+                     {
++                        // Conan: screen-space draws (PA_CL_VTE_CNTL without viewport
++                        // scale) are mapped to NDC by the host through g_ScreenXform.
++                        out += "#ifdef CONAN_RECOMP\n\toPos.xy = oPos.xy * g_ScreenXform.xy + g_ScreenXform.zw * oPos.w;\n#endif\n";
+                         out += "\toPos.xy += g_HalfPixelOffset * oPos.w;\n";
+                     }
+                 }
+diff --git a/XenosRecomp/shader_recompiler.h b/XenosRecomp/shader_recompiler.h
+index 791def7..ae5e5dd 100644
+--- a/XenosRecomp/shader_recompiler.h
++++ b/XenosRecomp/shader_recompiler.h
+@@ -37,6 +37,21 @@ struct ShaderRecompiler : StringBuffer
+     std::unordered_set<uint32_t> elseLabels;
+     uint32_t specConstantsMask = 0;
+ 
++#ifdef CONAN_RECOMP
++    // Structured loops: unique id per emitted loop (iterator / aL save names).
++    uint32_t loopCounter = 0;
++    std::vector<uint32_t> loopStack;
++    // Literal loop constants from the definition table (defi), keyed by loop id.
++    std::unordered_map<uint32_t, uint32_t> literalLoopConstants;
++    std::string loopConstantExpr(uint32_t loopId) const
++    {
++        auto it = literalLoopConstants.find(loopId);
++        if (it != literalLoopConstants.end())
++            return fmt::format("0x{:X}u", it->second);
++        return fmt::format("g_LoopConstant({})", loopId);
++    }
++#endif
++
+ #ifdef UNLEASHED_RECOMP
+     bool hasMtxProjection = false;
+     bool hasMtxPrevInvViewProjection = false;

@@ -1,0 +1,115 @@
+diff --git a/src/core/exception_handler_win.cpp b/src/core/exception_handler_win.cpp
+index 4a9b1ee..2536828 100644
+--- a/src/core/exception_handler_win.cpp
++++ b/src/core/exception_handler_win.cpp
+@@ -15,9 +15,18 @@
+ 
+ #include "platform_win.h"
+ 
++#include <dbghelp.h>
++
++#include <string>
++
++#include <fmt/format.h>
++
+ #include <rex/assert.h>
++#include <rex/logging.h>
+ #include <rex/math.h>
+ 
++#pragma comment(lib, "dbghelp.lib")
++
+ namespace rex::arch {
+ 
+ // Handle of the added VectoredExceptionHandler.
+@@ -98,6 +107,42 @@ LONG CALLBACK ExceptionHandlerCallback(PEXCEPTION_POINTERS ex_info) {
+       return EXCEPTION_CONTINUE_EXECUTION;
+     }
+   }
++
++  // DIAGNOSTIC PATCH (see docs/error_log.md E016, patches/sdk/): no
++  // debugger is available on this machine to symbolize an unhandled crash,
++  // so resolve the faulting host RIP to a function name + source line
++  // ourselves via dbghelp, using the PDB this RelWithDebInfo build already
++  // produces. Best-effort only (SymInitialize/SymFromAddr can fail, e.g. if
++  // called re-entrantly from a bad stack) - never let this diagnostic path
++  // itself throw or crash harder than the original exception.
++  {
++    HANDLE process = GetCurrentProcess();
++    static bool sym_initialized = false;
++    if (!sym_initialized) {
++      SymSetOptions(SYMOPT_LOAD_LINES | SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS);
++      sym_initialized = SymInitialize(process, nullptr, TRUE) != FALSE;
++    }
++    if (sym_initialized) {
++      DWORD64 rip = thread_context.rip;
++      alignas(SYMBOL_INFO) uint8_t symbol_buffer[sizeof(SYMBOL_INFO) + 256] = {};
++      auto* symbol = reinterpret_cast<SYMBOL_INFO*>(symbol_buffer);
++      symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
++      symbol->MaxNameLen = 256;
++      DWORD64 displacement = 0;
++      DWORD line_displacement = 0;
++      IMAGEHLP_LINE64 line = {};
++      line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
++      bool got_symbol = SymFromAddr(process, rip, &displacement, symbol) != FALSE;
++      bool got_line = SymGetLineFromAddr64(process, rip, &line_displacement, &line) != FALSE;
++      REXLOG_ERROR(
++          "[exception_handler] Unhandled exception at host RIP=0x{:016X}: {}{}{}{}",
++          rip, got_symbol ? symbol->Name : "<unknown symbol>",
++          got_symbol ? fmt::format("+0x{:X}", displacement) : std::string(),
++          got_line ? fmt::format(" at {}:{}", line.FileName, line.LineNumber) : "",
++          got_line ? fmt::format(" (+0x{:X})", line_displacement) : "");
++    }
++  }
++
+   return EXCEPTION_CONTINUE_SEARCH;
+ }
+ 
+diff --git a/src/system/xmemory.cpp b/src/system/xmemory.cpp
+index 76cc877..a0c9aa3 100644
+--- a/src/system/xmemory.cpp
++++ b/src/system/xmemory.cpp
+@@ -27,6 +27,7 @@
+ #include <rex/stream.h>
+ #include <rex/system/function_dispatcher.h>
+ #include <rex/system/mmio_handler.h>
++#include <rex/system/thread_state.h>
+ #include <rex/system/xmemory.h>
+ #include <rex/thread.h>
+ 
+@@ -547,6 +548,36 @@ bool Memory::AccessViolationCallback(std::unique_lock<std::recursive_mutex> glob
+         "Unhandled guest access violation: {} of guest 0x{:08X} (host 0x{:016X}) on thread 0x{:X}",
+         is_write ? "write" : "read", virtual_address, reinterpret_cast<uintptr_t>(host_address),
+         rex::thread::current_thread_id());
++    // DIAGNOSTIC PATCH (see docs/error_log.md E016, patches/sdk/): no debugger
++    // is available on this machine, and a plain AV report gives no way to
++    // find which guest function faulted. The vectored exception handler runs
++    // on the faulting thread itself, so the thread-local PPCContext is still
++    // valid here - dump LR (the caller's return address, i.e. which bl/call
++    // site got us here) and the argument/likely-this-pointer GPRs so the
++    // crash can be traced back to a specific guest function without one.
++    if (auto* ts = rex::runtime::ThreadState::Get()) {
++      auto* ctx = ts->context();
++      REXSYS_ERROR(
++          "  PPCContext at fault: lr=0x{:016X} ctr=0x{:016X} r0=0x{:016X} r1=0x{:016X} "
++          "r2=0x{:016X} r3=0x{:016X} r4=0x{:016X} r5=0x{:016X} r6=0x{:016X} r7=0x{:016X} "
++          "r8=0x{:016X} r9=0x{:016X} r10=0x{:016X}",
++          ctx->lr, ctx->ctr.u64, ctx->r0.u64, ctx->r1.u64, ctx->r2.u64, ctx->r3.u64, ctx->r4.u64,
++          ctx->r5.u64, ctx->r6.u64, ctx->r7.u64, ctx->r8.u64, ctx->r9.u64, ctx->r10.u64);
++      REXSYS_ERROR(
++          "  r11=0x{:016X} r12=0x{:016X} r13=0x{:016X} r14=0x{:016X} r15=0x{:016X} "
++          "r16=0x{:016X} r17=0x{:016X} r18=0x{:016X} r19=0x{:016X} r20=0x{:016X}",
++          ctx->r11.u64, ctx->r12.u64, ctx->r13.u64, ctx->r14.u64, ctx->r15.u64, ctx->r16.u64,
++          ctx->r17.u64, ctx->r18.u64, ctx->r19.u64, ctx->r20.u64);
++      REXSYS_ERROR(
++          "  r21=0x{:016X} r22=0x{:016X} r23=0x{:016X} r24=0x{:016X} r25=0x{:016X} "
++          "r26=0x{:016X} r27=0x{:016X} r28=0x{:016X} r29=0x{:016X} r30=0x{:016X} r31=0x{:016X} "
++          "last_indirect_target=0x{:08X}",
++          ctx->r21.u64, ctx->r22.u64, ctx->r23.u64, ctx->r24.u64, ctx->r25.u64, ctx->r26.u64,
++          ctx->r27.u64, ctx->r28.u64, ctx->r29.u64, ctx->r30.u64, ctx->r31.u64,
++          ctx->last_indirect_target);
++    } else {
++      REXSYS_ERROR("  No ThreadState bound on this thread; cannot dump PPCContext");
++    }
+     return false;
+   }
+ 

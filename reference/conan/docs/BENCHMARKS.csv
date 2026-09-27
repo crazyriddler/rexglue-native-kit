@@ -1,0 +1,17 @@
+timestamp,commit,scenario,resolution,api,renderer_path,avg_frametime_ms,p50_ms,p95_ms,p99_ms,cpu_ms,gpu_ms,fps,draws,copies_resolves,notes
+2026-09-24,7c058f8+wip,chance_meeting_idle(nav_ingame.txt t=45-100s),1280x720 rs1 novsync,D3D12,xenos-legacy,23.3,24.8,25.3,28.0,cp_busy=23.3(100%),6.4,43,1753,30 resolves/36 RT switches,CP thread saturated; scene renders black (HUD only) - under investigation
+2026-09-24,5425a4d+waitable,scenario_jungle t50-90 (1200-draw cluster),1280x720 rs1 novsync,D3D12,xenos-legacy+waitable-present,9.46,8.57,12.79,14.16,cp_cpu=9.3 guest_cpu=5.6,3.0,106,1203,30 resolves/37 RT sw,EXP-007 present fix; before=14.0ms (EXP-006)
+2026-09-24,5425a4d,scenario_jungle t50-90 (1200-draw cluster),1280x720 rs1 novsync,D3D12,xenos-legacy,13.95,14.05,18.0,18.3,cp_cpu=8.1 guest_cpu=10.2,4.1,72,1195,30 resolves/37 RT sw,EXP-006 baseline (3 runs 13.93/13.97/14.06)
+2026-09-25,463911c+wip,scenario_jungle t50-90,1280x720 rs1 novsync vblank1000,D3D12,xenos-legacy,4.77,4.60,5.91,7.33,cp_busy=3.78,,,1432,,E041 NaN sanitizer no longer reads back write-combined memory (was 82 ms in RelWithDebInfo profile path)
+2026-09-25,463911c+wip,scenario_jungle t50-90,1280x720 rs1 novsync vblank1000,D3D12,native (Xenos sync-only),10.03,9.16,15.27,16.02,,,,,,before buffer/constant optimizations
+2026-09-25,463911c+wip,scenario_jungle t50-90,1280x720 rs1 novsync vblank1000,D3D12,native (Xenos sync-only),7.16,6.90,9.34,9.87,,,,,,dirty-range VBs + CB reuse + slot cache (3 runs 7.16/7.17/7.87)
+2026-09-25,b2c4ced+msaa,scenario_jungle t50-90,1280x720 rs1 novsync vblank1000,D3D12,native (Xenos sync-only),7.41,7.12,9.81,11.01,,,,,,EXP-028 host 4x MSAA (native_msaa=false: 7.40)
+2026-09-25,85162a9+,scenario_jungle t50-90,1280x720 rs1 novsync vblank1000,D3D12,native (Xenos sync-only),6.05,5.75,8.30,8.95,,,,,,resolve textures keyed by size (no per-frame recreation)
+2026-09-25,85162a9+,scenario_jungle t50-90,1280x720 rs1 novsync vblank1000,D3D12,native (Xenos sync-only),5.70,5.45,7.99,8.52,,,,,,+ texture write watches
+2026-09-25,85162a9+,scenario_jungle t50-90,1280x720 rs1 novsync vblank1000,D3D12,native (Xenos sync-only),5.57,5.28,7.63,8.26,,,,,,+ SSE4.1 index scan (EXP-029)
+2026-09-25,be7864f,scenario_jungle t50-90,1280x720 rs1 novsync vblank1000,D3D12,native worker (lag 0),4.52,4.30,6.05,6.56,,,,,,EXP-030 recording worker, swap waits for current frame
+2026-09-25,be7864f+,scenario_jungle t50-90,1280x720 rs1 novsync vblank1000,D3D12,native worker (lag 1),4.22,3.98,5.74,6.20,,,,,,EXP-030 worker may trail one frame (legacy 4.77)
+2026-09-25,exp032,scenario_jungle t50-90,1280x720 rs1 novsync vblank1000,D3D12,native worker (lag 1),4.235,4.01,5.73,6.02,,,,,,EXP-032 after fidelity fixes (A/B 50 dB)
+2026-09-25,exp036,scenario_jungle t50-90,1280x720 rs1 novsync vblank1000,D3D12,native (no GPU plugin),4.23,3.98,5.71,5.97,,,,,,EXP-036 NativeGraphicsSystem; plugin sync-only 4.22
+2026-09-26,exp047-base,scenario_jungle t50-90,1280x720 rs1 novsync vblank1000,D3D12,native (no GPU plugin),4.28,4.14,5.91,6.13,,,,,,EXP-047 baseline before optimization round
+2026-09-26,exp047,scenario_jungle t50-90,1280x720 rs1 novsync vblank1000,D3D12,native x86-64-v3,4.03,3.83,5.34,5.53,,,,,,EXP-047 name-lookup cache + PM4 skip + dbg cleanup + AVX2 (4.11 second run)

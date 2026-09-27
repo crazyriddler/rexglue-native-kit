@@ -1,0 +1,1 @@
+# Cold boot with no input: publisher logos and intro videos play unskipped.
