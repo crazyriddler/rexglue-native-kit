@@ -16,6 +16,12 @@
 - GPU: `native: GPU time` log (timestamps) and `--native_gpu_pass_timing`.
 - One-stop: `SCEN_A=... SCEN_B=... bench/opt_baseline.sh <tag>` (Release) -> artifacts/profiles/opt_<tag>.txt.
 - Paired runs (A B A B) when the difference is < 5%; watch for path clusters.
+- Handheld proxy: repeat the key scenario with the process limited to 6 logical CPUs
+  (`cmd //c start "" /affinity 3F <exe> ...` from Git Bash); an optimization must not only win on a
+  16-thread desktop (LostOdysseyRecomp "3C6T" method). Worker pools (e.g. PSO precompile)
+  should size from the process affinity mask, not `hardware_concurrency()`.
+- Judge a local speedup on the whole frame: LostOdysseyRecomp's 9-15x vertex-compare SIMD
+  gave +0.6% fps because the GPU dominated.
 
 ## What cost what (Conan, RTX 4080 / 5800X3D)
 

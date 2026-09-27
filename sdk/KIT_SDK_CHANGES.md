@@ -48,6 +48,15 @@ Benchmark / diagnostics
   `sample_profile_all_threads`).
 - Thread CPU accounting, WAIT_REG_MEM timing, `gpu_trace_register`.
 
+Codegen correctness
+- `sraw` / `srad` (src/codegen/builders/logical.cpp): XER.CA is now set for a negative source
+  when the shift count is >= 32 / >= 64 (every bit shifted out). The clamped comparison
+  alone cleared CA for 0x80000000 / 0x8000000000000000. Same defect LostOdysseyRecomp fixed
+  in XenonRecomp (docs/UPSTREAM_RESEARCH.md, Lost Odyssey). Test:
+  `python -m pytest scripts/tests/test_codegen_sra.py` (renders the emitted strings, compares
+  with the ISA; fails on the old code). Needs a codegen re-run of a port to take effect;
+  expected impact is rare (CA consumed after a variable arithmetic shift of that value).
+
 Kit-only changes (not in the source branch)
 - `thirdparty/CMakeLists.txt`: accepts vendored submodule content without `.git`.
 - `src/ui/rex_app.cpp`: `--dump_xex_image=<file>` writes the loaded (decrypted,

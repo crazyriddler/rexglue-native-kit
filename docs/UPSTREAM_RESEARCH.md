@@ -486,3 +486,52 @@ merged into docs/ANY_GAME_CHECKLIST.md and PERFORMANCE_GUIDE.md (G14).
   delta-time fixes when the game logic cannot run faster.
 - `output_resolution.toml`: native output size by patching the device backbuffer dims,
   the per-frame force-to-1280 and the projection aspect at each place it is built.
+
+## LostOdysseyRecomp (researched 2026-09-27)
+
+Source: https://github.com/freefrank/LostOdysseyRecomp @ `81fe304` (2026-09-27), v0.7.3.
+XenonRecomp + XenosRecomp + plume (UnleashedRecomp lineage, not ReXGlue); Unreal Engine 3
+game. Renderer: Xenos PM4/register interpretation with ucode -> HLSL -> DXIL on plume
+D3D12/Vulkan (their roadmap removes the "legacy PM4 packet translation layer"), so the
+architecture is closer to a lean Xenia than to the kit's XDK hooks. Its value for the kit is
+the **measurement discipline and the concrete findings** (docs/notes/, mostly Chinese).
+
+### Findings, with their numbers
+- **Depth-clear coalescing** (`vulkan-depth-clear-performance-2026-09-13.md`): 720 EDRAM
+  tile rectangles per clear coalesced exactly into 1: 4K Vulkan 7.5 -> 43.5 fps, GPU
+  132.9 -> 21.1 ms, record 37.3 -> 4.9 ms. The kit hooks D3DDevice_Clear with the game's own
+  rects (0-1 usually), so the pathological case is unlikely, but the rule is generic: union
+  clear/resolve rects before issuing, and a rect set covering the whole surface becomes a
+  full clear (NumRects = 0) so the driver can fast-clear (NATIVE_RENDERER_ARCHITECTURE §8).
+- **Submission ring** (`reblue-gpu-comparison.md`, `perf-gpu-ring-compare.md`): the old
+  renderer waited on the fence right after each mid-frame Flush (~12-15 ms of a 21 ms draw
+  phase). Two slots, submit without waiting, wait only when a slot is reused: fence_wait
+  0.0007 ms mean. Same contract as the kit's frames-in-flight + upload overflow pages.
+- **Root signature / descriptor-table de-duplication** in plume (Issue #70), counters only
+  behind `LO_RENDER_TIMING`.
+- **CPU guide** (`cpu-performance-optimization-guide.md`): measure first (fence waits, mid-frame
+  splits, memcmp share per thread, hash chains), then single-thread waste, only then bounded
+  "parallel prepare / serial commit". Rejected with evidence: hand-written register SIMD for
+  constants (1.53 -> 2.16 ms), default thread pinning, a 6-worker Xenon-mimicking scheduler,
+  parallelizing the game's render function. A vertex-compare SIMD gave 9-15x in isolation
+  but +0.6% fps because the GPU dominated at 4K: always check the whole frame.
+- **Wait-path modernization**: kernel Event/Semaphore/Mutant timed waits polled every
+  200 us; replaced by condition-variable waits with deadlines (their runtime, not ReXGlue;
+  the kit's equivalents are PERFORMANCE_GUIDE item 7).
+- **"3C6T" handheld envelope** (`cpu-card-d-3c6t-city-2026-09-14.md`): run the whole process
+  with affinity 0x3F (3 physical cores / 6 logical CPUs) as a handheld proxy; results must
+  hold there, not only on a 16-thread desktop. Found: shader preparation sized its pool from
+  `hardware_concurrency()` (16 -> 15 workers) instead of the process affinity.
+- **Shader discovery at UE3 scale** (`shader-preparation.md`): 20,686 source shaders inside
+  compressed UE3 packages (CPX/FPD); a built-in layout index cut discovery 74 s -> 13 s and
+  application reads 15.2 GB -> 142 MB; 28,484 shaders prepared at startup in parallel with a
+  skippable progress screen and a persistent cache.
+- **Recompiler semantic audit** (`recompiler-width-audit.md`): 9 defect classes in XenonRecomp
+  validated by 3,258 generated-instruction checks (update-form loads/stores high word,
+  RLWIMI wrapping masks, SRAW/SRAD carry, 18 missing Rc forms, atomic/absolute address
+  wrap, BLRL trap, bctr low bits, BDNZF bit selection). Checked against the kit SDK on
+  2026-09-27: BLRL, RLWIMI and BDNZF are already correct; **SRAW/SRAD carry was wrong and is
+  fixed** (sdk/KIT_SDK_CHANGES.md, scripts/tests/test_codegen_sra.py); bctr low bits are
+  harmless for valid code; the Rc-form and high-word items remain an open audit for the kit.
+- Codegen generation guard: hashes of generator, config and outputs checked before build
+  (stale generated code after a generator change was a real failure there).
