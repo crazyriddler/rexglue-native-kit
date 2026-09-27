@@ -10,6 +10,7 @@ add_executable(unit_tests
     core/hash_test.cpp
     core/stream_test.cpp
     core/chrono_test.cpp
+    core/timer_queue_test.cpp
     ppc/import_function_test.cpp
     ppc/stack_test.cpp
     system/guest_path_test.cpp
@@ -36,6 +37,7 @@ target_link_libraries(unit_tests PRIVATE
     rexcodegen
     rexruntime
     Catch2::Catch2WithMain
+    xxHash::xxhash  # core/hash_test.cpp includes rex/hash.h -> xxhash.h (kit fix)
 )
 
 # ReXApp is shipped as source for recomp projects, rather than compiled into

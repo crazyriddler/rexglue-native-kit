@@ -59,6 +59,18 @@ Codegen correctness
   with the ISA; fails on the old code). Needs a codegen re-run of a port to take effect;
   expected impact is rare (CA consumed after a variable arithmetic shift of that value).
 
+Tests (SDK self-test, docs/VALIDATION_GUIDE.md "SDK self-tests")
+- `tests/ppc/asm/instr_sraw.s`, `instr_srad.s`: sign-bit-only cases (shift 31/32/63, 63/64)
+  for the carry fix; they fail on the old builder (verified 2026-09-27).
+- `tests/unit/core/timer_queue_test.cpp` (new): one-shot and recurring timers, and idle CPU
+  of a waiting queue (< 3 ms per 500 ms; blocking strategy ~0.1 ms, upstream spin ~12.5-14.6 ms
+  on Linux; fails on the upstream timer_queue.cpp).
+- `tests/unit/CMakeLists.txt`: link `xxHash::xxhash` (hash_test.cpp did not compile upstream).
+- `cmake/ppc_test_pipeline.cmake`: falls back to the kit's `tools/binutils` when `sdk/tools`
+  does not exist.
+- Known upstream failures on Linux (files identical to upstream `c94f5eb`): `chrono_test.cpp`
+  FILETIME 1601-epoch cases and `output_stamp_test.cpp` escaping of paths with spaces/`#`.
+
 Kit-only changes (not in the source branch)
 - `thirdparty/CMakeLists.txt`: accepts vendored submodule content without `.git`.
 - `src/ui/rex_app.cpp`: `--dump_xex_image=<file>` writes the loaded (decrypted,

@@ -52,6 +52,30 @@ The user's own saves folder is off-limits: create bench saves inside the bench u
 Window captures: `tools/capture_window.py` (own process only, PrintWindow with
 PW_RENDERFULLCONTENT; screen copy does not capture D3D content reliably).
 
+## SDK self-tests (after any change under `sdk/`)
+
+The SDK carries its own suites; run them before rebuilding a port on a modified SDK.
+```bash
+cd sdk
+cmake --preset win-amd64 -DREXGLUE_BUILD_TESTS=ON        # Linux: linux-amd64 (see below)
+cmake --build out/build/win-amd64 --config Release --target rexglue ppc_tests unit_tests
+out/win-amd64/Release/ppc_tests      # PPC instruction semantics through the real recompiler
+out/win-amd64/Release/unit_tests     # core, kernel, memory, codegen writer, timer queue
+```
+- `ppc_tests` assembles `sdk/tests/ppc/asm/*.s` with `tools/binutils`, recompiles them with
+  `rexglue recompile-tests` and checks registers/flags. Expected: all pass (2026-09-27:
+  1463 cases, 5745 assertions). **An instruction bug is fixed by adding a case here first**
+  (format: `#_ REGISTER_IN` / `#_ REGISTER_OUT`, carry via `adde r6, r0, r0`), showing it
+  fails, then fixing the builder.
+- `unit_tests`: expected all pass except the known upstream Linux failures listed in
+  `sdk/KIT_SDK_CHANGES.md` (chrono 1601 epoch, output-stamp path escaping).
+- Linux (e.g. a cloud check without Windows): clang >= 19 (clang 18 + libstdc++ 13 lacks
+  `std::expected`: pass `-DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20`) and
+  SDL's X11/Wayland/ALSA/Pulse development packages; `tools/binutils` Linux binaries are
+  executable in git.
+- `python -m pytest scripts/tests` covers the kit's own Python tools and the sraw/srad
+  emitter check without building the SDK.
+
 ## Additional validation layers
 
 These complement the Xenos A/B; none replaces it. The shader harness, golden dumps and

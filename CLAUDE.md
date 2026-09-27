@@ -51,8 +51,9 @@ Session start: `docs/PROJECT_STATE.md` (phase, next actions), latest
 10. Build and run after material changes; fix failures yourself and continue.
 11. Record everything (DECISION_GUIDE §5); local git commit at each milestone (no remote
     needed).
-12. Modify the SDK fork freely when it blocks progress; document it. Never replace `sdk/`
-    with an upstream checkout.
+12. Modify the SDK fork freely when it blocks progress; document it in
+    `sdk/KIT_SDK_CHANGES.md` and run the SDK self-tests (VALIDATION_GUIDE). Never replace
+    `sdk/` with an upstream checkout.
 
 ## Safety and environment constraints
 - The user may be playing a release build at the same time: never kill processes by image
