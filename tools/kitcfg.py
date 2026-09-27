@@ -38,4 +38,11 @@ def win_path(p):
     return p
 
 
-LLVM_SYMBOLIZER = os.path.join(win_path(CFG.get('LLVM_DIR', '')), 'bin', 'llvm-symbolizer.exe')
+def kit_path(p):
+    """kit.env path: relative = kit root, /c/... = Git Bash absolute."""
+    if p and not (p.startswith('/') or (len(p) > 1 and p[1] == ':')):
+        return os.path.join(ROOT, p)
+    return win_path(p)
+
+
+LLVM_SYMBOLIZER = os.path.join(kit_path(CFG.get('LLVM_DIR', '')), 'bin', 'llvm-symbolizer.exe')

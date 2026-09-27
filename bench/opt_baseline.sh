@@ -7,7 +7,7 @@
 # REL=<exe dir> selects another build. Results: artifacts/profiles/opt_<tag>.txt
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT" || exit 1
-set -a; source kit.env; set +a
+KIT_ENV_QUIET=1 source scripts/dev_env.sh
 TAG=$1; shift
 REL=${REL:-$ROOT/$PORT_DIR/out/build/$BUILD_REL}
 A=${SCEN_A:?set SCEN_A}; B=${SCEN_B:-$A}

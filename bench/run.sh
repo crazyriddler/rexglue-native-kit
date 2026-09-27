@@ -6,7 +6,7 @@
 # screenshots dir artifacts/screenshots/<name>. Exits after <exit_after_s>.
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-set -a; source "$ROOT/kit.env"; set +a
+KIT_ENV_QUIET=1 source "$ROOT/scripts/dev_env.sh"
 NAME=$1; SCRIPT=$2; SECS=$3; shift 3
 UD="$ROOT/bench/userdata_run"
 # USERDATA_TEMPLATE=<dir> uses another user data root (e.g. one per save).

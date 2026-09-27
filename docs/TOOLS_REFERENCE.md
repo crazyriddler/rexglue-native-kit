@@ -45,7 +45,9 @@ in Git Bash unless noted.
 
 | Script | Use |
 |---|---|
-| `dev_env.sh` | toolchain environment (source it) |
+| `setup_toolchain.sh --accept-microsoft-license [--debug-tools]` | install the whole toolchain into `tools/toolchain/` (LLVM, xwin CRT/SDK, CMake, Ninja, Python + modules, VC++ runtime; docs/TOOLCHAIN_SETUP.md) |
+| `fetch_vc_redist.py <dir>` | VC++ runtime DLLs from the VS 2022 manifest (called by setup_toolchain.sh) |
+| `dev_env.sh` | toolchain environment: kit.env paths (relative = kit root) first on PATH, INCLUDE/LIB, lld; kit scripts source it, direct calls use `source scripts/dev_env.sh && ...` |
 | `restore_sdk_thirdparty.sh [names]` | re-vendor missing/empty `sdk/thirdparty/` entries at the SDK base pins + kit patches (the entries are in git; docs/TOOLCHAIN_SETUP.md) |
 | `check_vulkan_stack.py` | SDK Vulkan submodule pins; in the kit (vendored SDK) it only reports that pins are not checkable |
 | `tests/` (`python -m pytest scripts/tests`) | codegen semantics (sraw/srad), xdk_layout.py, check_vulkan_stack |
@@ -63,7 +65,7 @@ in Git Bash unless noted.
 | `verify_local_workspace.ps1` | check the kit control files, Claude Code and git are present |
 | `check_kit.ps1` | after phase 0: check the per-game state docs exist (fails on a fresh kit by design) |
 | `fetch_upstream_references.ps1` | shallow-clone the surveyed projects into `_research/upstream/` |
-| `requirements-dev.txt` | Python modules for the tools and tests (`python -m pip install --user -r scripts/requirements-dev.txt`) |
+| `requirements-dev.txt` | Python modules for the tools and tests (installed into the kit Python by setup_toolchain.sh) |
 | `PSReX/`, `vs/rexglue-devprompt.*`, `git/hook-pre-commit.ps1` | ReXGlue SDK maintainer tooling (Visual Studio developer shell, clang-format pre-commit hook); not used by the kit workflow, which builds with `dev_env.sh` + `bench/build.sh` |
 
 ## SDK cvars added by this fork (useful everywhere)

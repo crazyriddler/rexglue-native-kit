@@ -5,7 +5,7 @@
 # run against a stale rexruntime.dll (a trap that invalidated a test once).
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-source "$ROOT/scripts/dev_env.sh" > /dev/null
+KIT_ENV_QUIET=1 source "$ROOT/scripts/dev_env.sh"
 B=${1:-$BUILD_DEV}
 cd "$ROOT/$PORT_DIR"
 cmake --build "out/build/$B" -- -j"$(nproc)" 2>&1 | grep -E "error:|FAILED" && exit 1

@@ -18,8 +18,9 @@ sdk/                    ReXGlue v0.10.0 fork (base c94f5eb + sdk/KIT_SDK_CHANGES
 game/                   <- the user drops the game here (default.xex + data)
 port/                   created in phase 0 by `rexglue init` (manifest, src/, generated/, docs/error_log.md)
 bench/                  run/run_safe/build/ab/repro/opt scripts, scenario_*.txt, userdata_template/
-tools/                  bench/profiling/capture tools, shaders/, xenosrecomp/, re/ (xdk_sigs, xdk_layout), dxc, binutils
-scripts/                dev_env.sh, restore_sdk_thirdparty.sh, port/ (xex decode, codegen scanners), tests/
+tools/                  bench/profiling/capture tools, shaders/, xenosrecomp/, re/ (xdk_sigs, xdk_layout), dxc, binutils,
+                        toolchain/ (LLVM, xwin CRT/SDK, CMake, Ninja, Python, VC++ runtime; setup_toolchain.sh)
+scripts/                setup_toolchain.sh, dev_env.sh, restore_sdk_thirdparty.sh, port/ (xex decode, codegen scanners), tests/
 reference/conan/        the complete worked example (sources, manifest, docs, logs) - read-only
 docs/                   knowledge base + templates/ for the per-game state files
 artifacts/, release/    generated (captures, profiles, shaders; portable release folders)
@@ -31,8 +32,14 @@ _research/upstream/     disposable clones of other projects (gitignored)
 ## Phase 0 - Bootstrap (hours)
 
 **Do**
-1. `source scripts/dev_env.sh`; verify clang, ninja, cmake, python modules
-   (TOOLCHAIN_SETUP, `/local-environment`). An `sdk/thirdparty/<name>` entry missing or empty
+1. Toolchain, inside the kit (no admin, nothing installed system-wide):
+   `bash scripts/setup_toolchain.sh --accept-microsoft-license` (the README tells the user that
+   starting the kit accepts Microsoft's terms for the CRT/SDK/VC++ runtime; ~1.1 GB download,
+   ~4 GB on disk, say so in the first status note; idempotent, skips what is installed). Then
+   `source scripts/dev_env.sh` and verify clang, ninja, cmake, python modules (TOOLCHAIN_SETUP,
+   `/local-environment`). Shell state does not persist between commands: kit scripts source
+   `dev_env.sh` themselves; direct clang/cmake/python calls need `source scripts/dev_env.sh && ...`.
+   An `sdk/thirdparty/<name>` entry missing or empty
    (should not happen, it is in git): `bash scripts/restore_sdk_thirdparty.sh <name>`.
 2. Inventory `game/`: default.xex, extra .xex/.dll modules, `.xexp` title update, sizes,
    SHA-256 of every executable (never modify the originals). Title ID from the XEX header or

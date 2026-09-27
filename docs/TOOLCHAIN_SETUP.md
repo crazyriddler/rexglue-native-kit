@@ -1,23 +1,29 @@
-# Toolchain setup (no admin rights, no Visual Studio instance needed)
+# Toolchain setup (no admin rights, no Visual Studio, inside the kit)
 
-Everything is per-user. The locations below are the kit author's PC (September 2026): on
-another PC install the same tools anywhere (the last column says how, without admin rights)
-and set the paths in `kit.env`; `scripts/dev_env.sh` wires them together. Verify before
-reinstalling.
+`bash scripts/setup_toolchain.sh --accept-microsoft-license [--debug-tools]` installs every
+build tool into `tools/toolchain/` (gitignored): pinned versions, SHA-256 checked, idempotent
+(an installed component is kept; delete its folder to reinstall). `kit.env` points at these
+folders by default (relative paths = kit root; an absolute `/c/...` path uses a toolchain
+installed elsewhere) and `scripts/dev_env.sh` puts them first on PATH and sets INCLUDE/LIB.
+Nothing outside the kit folder is touched (no PATH/registry change, no pip `--user`).
 
-| Tool | Location on the author's PC | How it was obtained (if it must be redone) |
+| Tool | Kit location | Source (pinned in setup_toolchain.sh) |
 |---|---|---|
-| LLVM/Clang 23.1.1 (clang, clang++, lld, llvm-symbolizer) | `C:\Users\jrbar\tools\clang+llvm-23.1.1-x86_64-pc-windows-msvc` | Official portable release tarball `clang+llvm-<ver>-x86_64-pc-windows-msvc.tar.xz` (not the installer) |
-| MSVC CRT + Windows SDK headers/libs | `C:\Users\jrbar\tools\xwin_sysroot` | `xwin` (github.com/Jake-Shadle/xwin) `splat --include-debug-libs`; one symlink error (os error 1314) is cosmetic |
-| Ninja | `%APPDATA%\Python\Python314\Scripts\ninja.exe` | `python -m pip install --user ninja` |
-| CMake >= 3.25 | on PATH | - |
-| Python 3.14 + numpy, Pillow, xxhash, pycryptodome | on PATH | `pip install --user numpy pillow xxhash pycryptodome` |
-| DXC v1.9.2607 | `tools/dxc` (local; gitignored: Microsoft's license on `dxil.dll` does not allow redistributing it in the repository) | `tools/shaders/build_corpus.sh` downloads it automatically if missing |
-| PowerPC binutils (objdump) | `tools/binutils` (in the kit) | - |
-| ProcDump | `C:\Users\jrbar\tools\procdump` | Sysinternals zip |
-| DbgEng debugger (`windbg-tool.exe`) | `C:\Users\jrbar\tools\windbgtool` | NuGet package `devolutions.windbg.tool.win-x64` (plain zip), MCP-style tools over dumps/live processes |
-| RenderDoc 1.37 portable | `C:\Users\jrbar\tools\renderdoc` | Launch under `renderdoccmd capture` from process start (late inject does not hook D3D12) |
-| Visual C++ redistributable DLLs (release folder) | `C:\Program Files\Microsoft Visual Studio\2022\*\VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT` | `kit.env VC_REDIST_GLOB` |
+| Python 3.14.7 + `scripts/requirements-dev.txt` (numpy, Pillow, xxhash, pycryptodome, pytest, clang-format) | `tools/toolchain/python` | python-build-standalone 20260924 `install_only` |
+| CMake 3.31.12 | `tools/toolchain/cmake` | Kitware portable zip (3.x: some vendored third-party CMake files predate CMake 4's policy floor) |
+| Ninja 1.13.1 | `tools/toolchain/bin/ninja.exe` | ninja-build release zip |
+| LLVM/Clang 23.1.1 (clang, clang++, lld, llvm-rc, llvm-symbolizer) | `tools/toolchain/llvm` | official portable tarball `clang+llvm-23.1.1-x86_64-pc-windows-msvc.tar.xz` (~900 MB, no symlinks inside) |
+| MSVC CRT + Windows SDK headers/libs (Microsoft license) | `tools/toolchain/xwin_sysroot` (`crt/`, `sdk/`) | xwin 0.10.0 `splat --include-debug-libs --disable-symlinks` (symlinks need a privilege users lack; NTFS is case-insensitive) |
+| Visual C++ runtime DLLs for the release folder (Microsoft license) | `tools/toolchain/vc_redist` (+ `VERSION.txt`) | `scripts/fetch_vc_redist.py`: newest x64 CRT redist package of the VS 2022 channel manifest (the one xwin uses), SHA-256 checked |
+| ProcDump, RenderDoc 1.37 portable (`--debug-tools`) | `tools/toolchain/procdump`, `tools/toolchain/renderdoc` | Sysinternals zip; renderdoc.org portable zip. Launch RenderDoc under `renderdoccmd capture` from process start (late inject does not hook D3D12) |
+| DXC v1.9.2607 | `tools/dxc` (gitignored: Microsoft's license on `dxil.dll` does not allow redistributing it in the repository) | `tools/shaders/build_corpus.sh` downloads it automatically if missing |
+| PowerPC binutils (objdump) | `tools/binutils` (in git) | - |
+| DbgEng debugger (optional) | anywhere | NuGet package `devolutions.windbg.tool.win-x64` (plain zip): MCP-style tools over dumps/live processes; not installed by the script |
+
+Validation status: the pinned URLs, hashes and archive layouts were checked on 2026-09-27;
+the script has not yet run end to end on Windows, and xwin/`fetch_vc_redist.py` could not be
+exercised from the cloud (Microsoft hosts blocked there). If a step fails, fix the script
+(record it in LESSONS_LEARNED A) rather than installing by hand.
 
 ## SDK third-party code (in the repository)
 

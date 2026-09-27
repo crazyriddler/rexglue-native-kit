@@ -37,7 +37,7 @@ from pathlib import Path
 try:
     import xxhash
 except ImportError:  # pragma: no cover
-    sys.exit("python module 'xxhash' missing: python -m pip install --user xxhash")
+    sys.exit("python module 'xxhash' missing: bash scripts/setup_toolchain.sh (kit Python) or python -m pip install xxhash")
 
 MAGIC = b"\x10\x2a\x11"
 HDR = struct.Struct(">9I")  # flags virtualSize physicalSize fieldC ctabOff defOff shaderOff field1C field20

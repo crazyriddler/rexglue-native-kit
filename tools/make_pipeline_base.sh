@@ -10,7 +10,7 @@
 #   (runs bench/scenario_<name>.txt for <secs> seconds each)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-set -a; source "$ROOT/kit.env"; set +a
+KIT_ENV_QUIET=1 source "$ROOT/scripts/dev_env.sh"
 EXE_DIR="$ROOT/$PORT_DIR/out/build/$BUILD_DEV"
 PL="$EXE_DIR/${GAME_NAME}_pipelines.bin"
 cd "$ROOT"
