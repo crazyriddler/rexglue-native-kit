@@ -93,7 +93,7 @@ hang, no enhancement enabled by default.
 | Every tool and script, SDK cvars | TOOLS_REFERENCE.md |
 | Recompiler, manifest and hook rules (ReXGlue 0.10.0) | REXGLUE_PORTING_RULES.md |
 | Why some popular optimizations are rejected; proven vs untested | STRATEGY_REVIEW.md |
-| Other projects: evidence and file references | UPSTREAM_RESEARCH.md, REFERENCE_SOURCES.md |
+| Other projects: index, evidence and file references | UPSTREAM_RESEARCH.md |
 | Local workspace contract (no remote required) | LOCAL_WORKSPACE.md |
 | Per-game state files to copy in phase 0 | templates/ |
 | The complete worked example | reference/conan/ |
