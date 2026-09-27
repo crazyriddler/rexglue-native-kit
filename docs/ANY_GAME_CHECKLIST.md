@@ -24,8 +24,10 @@ answers in PROJECT_STATE.md.
 | Revision identity | SHA-256 of default.xex (+ .xexp) | Record in PROJECT_STATE. Release builds should check it at startup and show a clear message on mismatch (Darkness README publishes the expected hashes); the recompiled code only matches one revision |
 | DLC | Packages the game can mount | skate3: `dlc/` folder next to the exe; SDK content manager + `stfs_extract.py` layout |
 | Jump tables the analyser misses | UnresolvedCall into switch targets | UnleashedRecomp/Darkness ship a `*_switch_tables.toml` (XenonRecomp format); ReXGlue has `switch_tables` in the manifest (`sdk/src/codegen/config.cpp:257`) |
-| setjmp/longjmp, save/restore helpers | Needed for correct codegen and for G1 below | Find `__savegprlr_14` etc. and setjmp/longjmp by signature; ReXGlue reads `setjmp_address` / `longjmp_address` (`config.cpp:124-130`) |
-| Codegen register-locality flags (G1) | Performance vs risk | UnleashedRecomp ships **all** of them on (`skip_lr`, `skip_msr`, `*_as_local`) with setjmp/longjmp addresses; Darkness deliberately ships them **all off** as a "correctness profile". Kit rule: start a new port with them off (Conan-validated path), enable in phase 8 one flag at a time with A/B + long session (PERFORMANCE_GUIDE G1) |
+| setjmp/longjmp, save/restore helpers | Needed for correct codegen and for G1 below. 11 of 12 surveyed ReXGlue ports set them; ReXGlue does not detect them | Late XDK: `tools/re/xdk_layout.py` (names setjmp/longjmp/`__savegprlr` from the 2012 XDK table); otherwise by signature/semantics. ReXGlue reads `setjmp_address` / `longjmp_address` (`config.cpp:124-130`) |
+| Native CRT (`[rexcrt]`) | memcpy/memset/str*/wcs*, Rtl*Heap, file I/O, fibers implemented natively by the SDK (`sdk/src/kernel/crt/`) | Used by 6 of 12 surveyed ports, not by Conan. Addresses from xdk_layout.py or semantics; verify each (REXGLUE_PORTING_RULES Phase 11). Enable after the game boots, memory/string group first, heap group last (needs all four + `rexcrt_heap_enable`) -> PERFORMANCE_GUIDE G14 |
+| Split manifest | Hundreds of overrides/hooks | `includes = [...]` with per-subsystem TOMLs (reblue `config/hooks/*.toml`, reNut/reDAHM `*_func/_crt/_hook.toml`) |
+| Codegen register-locality flags (G1) | Performance vs risk | TiP-Recomp ships a middle ground (`skip_lr`, `skip_msr`, `ctr/xer/cr/reserved_as_local` on; `non_argument/non_volatile_as_local` off); UnleashedRecomp ships **all** of them on (`skip_lr`, `skip_msr`, `*_as_local`) with setjmp/longjmp addresses; Darkness deliberately ships them **all off** as a "correctness profile". Kit rule: start a new port with them off (Conan-validated path), enable in phase 8 one flag at a time with A/B + long session (PERFORMANCE_GUIDE G1) |
 | Translator instruction bugs | Darkness had to fix vcmp*h record masks, fnmadd, vctuxs NaN, vpk* aliasing, mulhdu record flags in XenonRecomp | Checked 2026-09-27: the kit's ReXGlue codegen already has the fixed forms (0xFFFF masks, `-std::fma`, aliasing-safe vpkuhus/vpkuwus verified by test). Open: FP record forms (`fxxx.`) do not set CR1 from FPSCR in `builders/floating_point.cpp`; if the disassembly of a new game contains any, implement or guard them (Darkness rejects them explicitly) |
 
 ## 2. Renderer strategy (phase 4 decision)
@@ -57,6 +59,11 @@ All must keep "defaults = original game" and be tested before being exposed.
 | Draw distance / LOD | Engine constants (skate3 `skate3_draw_distance.cpp`); enhancement only |
 | Saves | Kit: Documents\<game> (user preference). Others offer portable mode (`saves/` or `portable.txt` next to the exe) |
 
+| Unlocked fps, second technique | When logic cannot run faster (fixed-step accumulators everywhere): keep logic at 30 Hz and interpolate what is rendered between ticks (reblue `engine/frame_interp.cpp`: cameras, bone palettes). Much more work; only for games where delta fixes fail |
+| Cutscene A/V sync | In-engine cutscenes that tick per rendered frame drift against audio after any long frame: audio-master catch-up with bounded extra ticks (AC6 `ac6_cutscene_resync.cpp`) |
+| Effects at full resolution | Rewrite the game's own render-buffer registration at init so every downstream size follows (AC6 `ac6_fullres_effects.cpp`; Conan did the same idea host-side with `full_scene_resolution`) |
+| Mods / texture packs | SetTexture hook dump + replace (reNut, TiP, AC6). Not a user requirement; possible later |
+
 ## 4. Runtime and pacing (phase 8)
 
 | Item | Technique | Source |
@@ -68,6 +75,9 @@ All must keep "defaults = original game" and be tested before being exposed.
 | Logging cost | Unbuffered log writes produced metronomic 45-73 ms hitches every report interval; buffer stdout/stderr, flush on exit/crash | Darkness. Kit: Release has logging off; do not benchmark hitches with a dev build that logs every 5 s |
 | PSOs at load time | Compile the pipelines a loaded asset will need while the game's loading screen is up, and hold the "loaded" flag until they finish | UnleashedRecomp `EnqueuePipelineTask` + `eDatabaseDataFlags_CompilingPipelines`. XDK-level equivalent for the kit: at the CreateVertex/PixelShader hook, enqueue the recorded PsoRecords that use that shader hash at high priority (gated item G13) |
 | Upload bursts | First-sight page-in of 25 MB geometry froze a frame 81 ms; Darkness caps fresh decode/upload at 4 MiB per frame and **defers draws** | Do not copy the draw deferral (it drops submitted draws for a frame, violating the kit invariants); use it as evidence for G7 (decode/upload off the worker, waiting instead of dropping) |
+
+| Scheduling races the 360 never showed | ReXGlue ignores guest thread priorities and affinities by default (`ignore_thread_priorities` / `ignore_thread_affinities` = true, `sdk/src/system/xthread.cpp:40-43`). Game job systems that relied on fixed cores/priorities race on PC: one-frame flicker, wrong save operation, rare loader crashes (AC6). Classify an intermittent bug by re-running with both cvars `false`; fix the race at its submitter (store before submit), not by a guard | AC6 `ac6_effect_mode_fix.cpp`, `ac6_storage_submit_order_fix.cpp` |
+| Fixes the developer already shipped | If porting the base revision, diff the TU's code for the same function: timing bugs are often fixed there | AC6 storage fix |
 
 ## 5. Testing that scales across games
 

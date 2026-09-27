@@ -412,3 +412,77 @@ of native inputs to catch stale objects after rollbacks.
 - UnleashedRecomp: `patch_file_path` / `patched_file_path` in the XenonRecomp config.
 - Kit SDK 0.10: no manifest key, but `UserModule::LoadFromFile` applies a sibling
   `<xex>p` for codegen and runtime alike (docs/ANY_GAME_CHECKLIST.md §1).
+
+## Survey of other ReXGlue ports (2026-09-27)
+
+Shallow clones, HEAD commits in parentheses. Most keep the SDK's Xenos emulation; they are
+read for **how ReXGlue behaves across games**, not for renderers. Generic conclusions are
+merged into docs/ANY_GAME_CHECKLIST.md and PERFORMANCE_GUIDE.md (G14).
+
+| Project (game) | SDK | Renderer | What is useful for the kit |
+|---|---|---|---|
+| zolaware/reblue (Blue Dragon) `ce0edad` | 0.10.0 | **native** (plume D3D12/Vulkan) | see below; the closest template to our design |
+| sal063/AC6_recomp (Ace Combat 6) `09144bb0` | 0.7.8 fork `rapidsamphire/rexglue-sdk@ac6recomp-fixes` | Xenos; an experimental native "replay" renderer was **demoted** to research tooling | race-condition fixes, TU diffing, cutscene A/V resync, fps-unlock physics, full-res effects via the game's buffer registry, [rexcrt] |
+| masterspike52/reNut (Banjo Nuts & Bolts) `fcdc8ba` | 0.10.0 | Xenos | XDK D3D names of a 2008 title (`config/renut_gpu_funcs.toml`), [rexcrt] incl. wide-string functions, texture dump/replace via a SetTexture hook, quality toggles as mid-asm hooks |
+| masterspike52/reDAHM (Destroy All Humans! PotF) `b1a3268` | 0.10.0 (community fork `SolarRecomps/rexglue-ostentation@dev` used by the author) | Xenos | [rexcrt], split manifest (`config/*_func/_crt/_hook.toml`) |
+| SolarCookies/TiP-Recomp (Viva Pinata TiP) `757f550` | 0.8.1 | Xenos | codegen middle ground: `skip_lr/skip_msr/ctr/xer/cr/reserved_as_local = true`, `non_argument/non_volatile_as_local = false`; fps/vsync/aspect hooks, shader/texture packs |
+| ihatecompvir/band3_recomp (Rock Band 3, TU5) `c51944b` | 0.8.0 | Xenos | TU-based codegen, [rexcrt] |
+| twist84/halo3_cache_release_recomp (Halo 3 build) `3d4a277` | ReXGlue commit `a78e0fd` | Xenos | manifest header records every hash of the input XEX |
+| testdriveupgrade/TDURE (Test Drive Unlimited) `6e59fee` | 0.7.4 | Xenos | very large function list (analysis struggles on big images) |
+| SkiddyToast/Crackdown (TU0) `1b89e0f`, YoshiCrystal9/re-gh2 `ef521f4`, PranchaD/re-Sonic06Demo `4b78cc0` | 0.2-0.x | Xenos | minimal configs: setjmp/longjmp addresses are the one thing every project sets |
+| rjkiv/dc3-decomp (Dance Central 3, **decompilation**, CC0) `149a613` | - | - | full symbol map incl. XDK libraries -> `tools/re/xdk_2012_dc3_symbols.tsv` (6,200 D3D/CRT/xapilib/xgraphics/d3dx9 functions with sizes and object files) + `tools/re/xdk_layout.py` |
+
+### Cross-project facts
+- **setjmp/longjmp**: set by 11 of 12 manifests. ReXGlue has no auto-detection; the kit
+  now finds them with xdk_layout.py (late XDK) or by signature/semantics.
+- **[rexcrt]**: 6 projects map guest CRT/heap/file/string functions to the SDK's native
+  implementations (`sdk/src/kernel/crt/`: ~70 functions incl. fibers; heap needs all four
+  Rtl*Heap and `rexcrt_heap_enable`). Conan used none -> PERFORMANCE_GUIDE G14.
+- **Split manifests** (`includes = [...]` with func/crt/hook files) keep hundreds of
+  overrides reviewable (reblue: one TOML per subsystem under `config/hooks/`).
+- **SDK forks are common** (AC6, reDAHM, skate3, ours). Record fork changes like
+  `sdk/KIT_SDK_CHANGES.md` does, and check community forks for fixes before debugging an
+  SDK-level problem.
+
+### AC6: races that the 360 never showed (`src/ac6_backend_fixes/`)
+- `ac6_effect_mode_fix.cpp`: one-frame effect/cloud flicker. Update and draw jobs share a
+  mode word written by the submitter and read later by a pool worker. On the 360, fixed
+  core assignment and guest priorities kept them ordered; "rexglue discards both guest
+  priorities and guest affinities". Kit SDK defaults confirm it:
+  `ignore_thread_priorities=true`, `ignore_thread_affinities=true`
+  (`sdk/src/system/xthread.cpp:40-43`).
+- `ac6_storage_submit_order_fix.cpp`: job op-code stored after Submit -> wrong save
+  operation. Found by **diffing the retail title update against the base XEX**: the
+  developer had already fixed it. Technique: when porting a base revision, diff the TU for
+  shipped fixes of timing bugs.
+- `ac6_cutscene_resync.cpp`: in-engine cutscenes tick per rendered frame while audio runs
+  on its own clock; a long frame desyncs them permanently. Audio-master catch-up (bounded
+  extra ticks when >= 2 behind).
+- `ac6_fps_physics_fix.cpp`: fps unlock broke flight dynamics that accumulate fixed
+  per-frame steps; scaled per call by the real delta.
+- `ac6_fullres_effects.cpp`: half-res effect chain moved to full res by rewriting the
+  game's own render-buffer registry at init (same EDRAM tile footprint), so every
+  downstream size stays self-consistent.
+- Renderer pivot: the native replay renderer competed with Xenos as a second "render
+  authority" and was demoted to tooling. Lesson consistent with the kit: one authoritative
+  output path, the other only as an A/B reference.
+
+### reblue: native-renderer pieces worth copying (`src/gpu/`, `config/hooks/`)
+- `pso_predictor.cpp` + `pso_predictor.toml`: brackets the engine's model build inside the
+  async load callback, predicts every (technique, vertex decl) PSO the model will need and
+  **gates the load completion until they are compiled** (watchdog-bounded). Concrete
+  template for G13.
+- `occlusion.cpp`: native occlusion queries as UAV counters read back kNumFrames later
+  (for the one query family the game uses, the sun). Template for G3.
+- `physical_buffers.cpp`: VB/IB registered at the engine's `XGOffsetResourceAddress`
+  calls during scene-graph build, freed at `XPhysicalFree`: persistent host mirrors
+  instead of per-draw dirty tracking. Alternative to the kit's page-dirty tracking for
+  static geometry when upload/planning cost shows up (G6/G7 family).
+- `native_texture_mirror.cpp`: host textures created at guest texture creation, evicted on
+  the engine's free path.
+- `dred.cpp`: DRED dump windowed to the unfinished ops (NATIVE_RENDERER_ARCHITECTURE §8).
+- `engine/frame_interp.cpp` (3.3k lines): fps unlock by **render interpolation** between
+  30 Hz logic ticks (cameras, bone palettes via polar decomposition), the alternative to
+  delta-time fixes when the game logic cannot run faster.
+- `output_resolution.toml`: native output size by patching the device backbuffer dims,
+  the per-frame force-to-1280 and the projection aspect at each place it is built.

@@ -132,7 +132,7 @@ busy-wait removal (fps cap CPU), PSO precompile + embedded base, x86-64-v3, memo
 guest functions if profiled. Measure every step (opt_baseline.sh, paired runs).
 Then re-classify the bound and apply only the gated optimizations whose gate is met
 (PERFORMANCE_GUIDE.md §"Gated optimizations"). On a guest-bound game (the usual case):
-G1 codegen register-locality flags -> G2 guest XDK D3D cost -> G11 PGO. Renderer/GPU-side
+G14 native CRT ([rexcrt]) -> G1 codegen register-locality flags -> G2 guest XDK D3D cost -> G11 PGO. Renderer/GPU-side
 items (resolve elision, vertex fetch in shader, parallel recording) only when the
 classification says renderer- or GPU-bound.
 

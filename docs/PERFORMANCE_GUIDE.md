@@ -74,7 +74,7 @@ in BENCHMARKS.csv (`guest_ceiling_ms`, `worker_busy_pct`, `gpu_ms`).
 
 | Result | Bound by | Optimize (in this order) |
 |---|---|---|
-| frame within ~5% of the guest ceiling | **guest code** (Conan: 4.03 vs 3.97 ms) | checklist items 7, 9, 10; then G1 codegen flags, G2 XDK D3D cost, G11 PGO, G3 occlusion |
+| frame within ~5% of the guest ceiling | **guest code** (Conan: 4.03 vs 3.97 ms) | checklist items 7, 9, 10; then G14 native CRT, G1 codegen flags, G2 XDK D3D cost, G11 PGO, G3 occlusion |
 | frame >> ceiling, worker busy ~ frame | **recording worker** | profile the worker; G6 vertex fetch in shader if SwapBufferRange/upload dominate; G7 texture decode off the worker; G5 parallel recording last |
 | gpu_ms ~ frame | **GPU** | per-pass timing; G4 resolve elision; the pass's own cost (MSAA, shadow size, enhancement) |
 | hitches only | **one-off work** | PSO (compiled-in-play counter), texture decode ms, upload overflow pages, guest loads |
@@ -103,6 +103,7 @@ Evaluation of where these come from: docs/STRATEGY_REVIEW.md.
 | G11 | clang PGO on the recompiled code | guest-bound, after G1 | Keep `-ffp-contract=off`; profile on several scenarios, not one; paired runs. Darkness found ThinLTO gave nothing: measure, do not assume |
 | G12 | Host thread placement: guest hardware threads on distinct physical cores (CPU Sets), present thread ABOVE_NORMAL | Present blocks / hitches at loads with cores saturated, or a guest worker sharing an SMT sibling with the engine thread | Scheduling only, guest semantics unchanged; Darkness: priority fixed 1.3 s Present stalls, core mapping gave no gain |
 | G13 | Load-time PSO precompile: at the CreateShader hook, enqueue recorded PSOs using that shader at high priority; optionally hold the game's loading flag until they finish (UnleashedRecomp) | cold precompile at startup too long (thousands of PSOs) or PSOs compiled in play after a level load | Never skip a draw; holding a loading flag needs the engine's flag found per game |
+| G14 | Native CRT: `[rexcrt]` for memcpy/memset/str*/wcs*/XMemCpy (then Rtl*Heap group + `rexcrt_heap_enable`, file I/O) | guest-bound and CRT functions visible in the render/game thread profile (expected: recompiled PPC memcpy/memset loops are much slower than host ones; measure the share first) | Codegen change; verify each address (xdk_layout.py or semantics), A/B + long session + save/load; heap group last (allocator change: watch RAM) |
 
 Rejected outright (see STRATEGY_REVIEW.md): reordering/sorting draws, GPU culling of draws
 the game submitted, placeholder PSOs, mapping states to "nearest canonical" PSOs, physical

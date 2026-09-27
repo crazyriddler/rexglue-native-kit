@@ -35,6 +35,7 @@ in Git Bash unless noted.
 | `shaders/build_corpus.sh` | full shader pipeline (docs/SHADER_PIPELINE.md) |
 | `shaders/gen_projection_regs.py` | per-shader register of the camera matrix constant (edit the constant name per engine) |
 | `re/xdk_sigs.py build|match` | XDK D3D function signatures (docs/GAME_ADAPTATION_GUIDE.md) |
+| `re/xdk_layout.py <register.cpp> [--image] [--lib d3d9i,LIBCMT,xapilibi]` + `re/xdk_2012_dc3_symbols.tsv` | name XDK D3D/CRT/xapilib functions (incl. setjmp/longjmp, memcpy, heap for [rexcrt]) by function-size layout for late-XDK games; reference = Dance Central 3 (2012, CC0 dc3-decomp). Test: `python -m pytest scripts/tests/test_xdk_layout.py` |
 | `re/disdb.py build`, `re/q.py dis|callers|callees|grep`, `re/gref.py`, `re/pm4scan.py`, `re/ptrtables.py`, `re/callargs.py`, `re/constwriters.py`, `re/fingerprint.py`, `re/apisurface.py`, `re/listrange.py` | generic disassembly analysis (set `CODE_START` to REX_CODE_BASE) |
 | `re/names.py`, `re/statetables.py`, `re/passtable.py`, `re/gamelayer.py`, `re/d3d_symbols.tsv` | Conan-specific names/table addresses: use as templates, update the addresses for the new game |
 | `binutils/powerpc-none-elf-objdump.exe` | PPC disassembler |

@@ -162,7 +162,7 @@ Ranked by expected gain on a guest-bound port. All are measurement-gated.
 2. Phase 3 baseline now ends with the **bound classification** and records the guest
    ceiling in BENCHMARKS.csv.
 3. Phase 6 adds the cheap hardening: DRED, PIX pass markers, NOT_ZEROED, RS 1.1.
-4. Phase 8 order: the Conan checklist -> G1 codegen flags -> G2 XDK D3D cost -> G11 PGO ->
+4. Phase 8 order: the Conan checklist -> G14 native CRT -> G1 codegen flags -> G2 XDK D3D cost -> G11 PGO ->
    renderer-side gated items only if the classification says renderer/GPU bound.
 5. Tooling investments that pay across games: shader numeric harness, capture replay,
    native golden dumps, release gates, `game_profile` consolidation at game #2.
