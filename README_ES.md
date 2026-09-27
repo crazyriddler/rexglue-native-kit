@@ -15,7 +15,7 @@ nativo D3D12, usando lo aprendido en el port de Conan (2007).
 | `bench/` | Scripts para lanzar el juego de forma automática y reproducible, comparación A/B fotograma a fotograma y medición de rendimiento |
 | `scripts/` | Entorno del compilador (`dev_env.sh`) y utilidades del port (descifrado del XEX, detectores de errores de codegen...) |
 | `.claude/` | Agentes y skills de Claude Code actualizados con este proceso |
-| `CLAUDE.md`, `START_PROMPT.md`, `RESUME_PROMPT.md` | Instrucciones de control y prompts de inicio y reanudación |
+| `CLAUDE.md`, `START_PROMPT.md`, `RESUME_PROMPT.md` | Instrucciones de control (reglas, seguridad, preferencias) y prompts de inicio y reanudación. Claude entra siempre por `docs/DECISION_GUIDE.md` (dónde está, qué hacer, qué documento tiene cada dato) y sigue `docs/NATIVE_PORT_PLAYBOOK.md` (qué hacer, decidir, evitar y cuándo termina cada fase) |
 | `kit.env` | Configuración del proyecto (nombre del juego, rutas del toolchain), que rellena Claude en la fase 0 |
 
 ## Cómo empezar un port nuevo

@@ -12,5 +12,5 @@ strong clue), L (label only). Template: reference/conan/docs/RENDERER_ANALYSIS.m
 ## 5. Game renderer layer (present, pass runner, batch renderer, materials, post effects)
 ## 6. Render passes
 ## 7. Frame render-target graph (from a capture/trace)
-## 8. Renderer strategy decision (docs/ANY_GAME_CHECKLIST.md §2): choice, evidence, what would change it
+## 8. Renderer strategy decision (docs/ANY_GAME_CHECKLIST.md §3): choice, evidence, what would change it
 ## 9. Game-specific facts for the native renderer (docs/GAME_ADAPTATION_GUIDE.md §2 table, filled)

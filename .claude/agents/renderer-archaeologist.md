@@ -11,5 +11,5 @@ confirm each hook target with pm4scan/q.py/callargs/constwriters/statetables
 (docs/GAME_ADAPTATION_GUIDE.md, docs/XDK_D3D_NOTES.md). Recover the game-specific facts:
 device pointer global, front buffer, present function, pass table or pass markers,
 scene/output resolution, shadow passes, camera matrix constants, busy-wait loops.
-Record the renderer strategy decision (docs/ANY_GAME_CHECKLIST.md §2). Write findings with
+Record the renderer strategy decision (docs/ANY_GAME_CHECKLIST.md §3). Write findings with
 address, evidence and confidence to docs/RENDERER_ANALYSIS.md.

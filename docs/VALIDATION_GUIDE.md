@@ -52,9 +52,11 @@ The user's own saves folder is off-limits: create bench saves inside the bench u
 Window captures: `tools/capture_window.py` (own process only, PrintWindow with
 PW_RENDERFULLCONTENT; screen copy does not capture D3D content reliably).
 
-## Additional validation layers (added by docs/STRATEGY_REVIEW.md)
+## Additional validation layers
 
-These complement the Xenos A/B; none replaces it.
+These complement the Xenos A/B; none replaces it. The shader harness, golden dumps and
+capture replay are specified but not built yet (STRATEGY_REVIEW §6); build each when its
+need appears.
 
 ### Shader numeric harness (open question Q-S1 of the reference)
 A/B proves the shaders a scenario uses. For the rest of the corpus: run each translated

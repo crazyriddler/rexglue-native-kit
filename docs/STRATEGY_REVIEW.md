@@ -156,19 +156,13 @@ Ranked by expected gain on a guest-bound port. All are measurement-gated.
    (it is the frozen, built-and-validated example); listed as phase-6 hardening in
    NATIVE_RENDERER_ARCHITECTURE.md §8 for the next port.
 
-## 5. Resulting backlog for the next port (in order)
+## 5. Where the outcome of this review lives
 
-1. Phases 0-7 keep the Conan method (47-58 dB native renderer in ~3 weeks), with these
-   additions from the later research: phase 0 answers ANY_GAME_CHECKLIST §1 (title update,
-   modules, revision hashes); phase 1 sets setjmp/longjmp; phase 4 records the renderer
-   strategy decision; phase 5 handles shaders in compressed packages.
-2. Phase 3 baseline now ends with the **bound classification** (guest ceiling in
-   BENCHMARKS.csv) and the **codegen optimization window**.
-3. Phase 6 adds the cheap hardening: DRED, PIX pass markers, NOT_ZEROED, RS 1.1.
-4. Phase 8 order: the Conan checklist -> any G14/G1 left -> G2 XDK D3D cost -> G11 PGO ->
-   renderer-side gated items only if the classification says renderer/GPU bound.
-5. Tooling investments that pay across games: shader numeric harness, capture replay,
-   native golden dumps, release gates, `game_profile` consolidation at game #2.
+The adopted items are now part of the procedure, so they are not repeated here: bound
+classification and codegen window -> playbook phase 3; setjmp/longjmp -> phase 1; hardening
+-> phase 6 and NATIVE_RENDERER_ARCHITECTURE §8; gated optimizations and their order ->
+PERFORMANCE_GUIDE; extra validation layers and release gates -> VALIDATION_GUIDE;
+game variability -> ANY_GAME_CHECKLIST.
 
 ## 6. Proven vs untested (read before trusting a doc line)
 

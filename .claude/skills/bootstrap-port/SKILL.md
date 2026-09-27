@@ -4,16 +4,6 @@ description: Phase 0: prepare a new port in the kit (toolchain check, game inven
 ---
 # Bootstrap port
 
-1. Read CLAUDE.md, docs/NATIVE_PORT_PLAYBOOK.md (phase 0), docs/TOOLCHAIN_SETUP.md.
-2. `source scripts/dev_env.sh`; verify clang, ninja, cmake, python modules.
-3. Inventory game/: XEX(es), DLL modules, size, SHA-256; title ID.
-4. Fill kit.env (GAME_NAME lowercase, TITLE_ID, GUEST_WIDTH/HEIGHT).
-5. Build the CLI: `cd sdk && cmake --preset win-amd64 && cmake --build out/build/win-amd64 --config Release --target rexglue`.
-6. `mkdir port && mv game port/game`; from port/: `../sdk/out/win-amd64/Release/rexglue.exe init --project-name $GAME_NAME --xex-path game/default.xex --game-root game --project-root . [--scan-dll]`.
-7. Copy docs/templates/* to docs/ and error_log.md to port/docs/; `git init` unless the kit is already a repository; first commit (game data is gitignored, never push it).
-8. Decoded image (scripts/port/xex_decode.py, or later --dump_xex_image) + objdump into port/logs/.
-9. Continue with /codegen-triage.
-
-Before codegen also answer docs/ANY_GAME_CHECKLIST.md §1: title update (.xexp next to
-default.xex, the SDK applies it for codegen and runtime; log "Loading XEX patch from"), extra
-modules (--scan-dll), revision SHA-256, setjmp/longjmp and save/restore helper addresses.
+Procedure: docs/NATIVE_PORT_PLAYBOOK.md Phase 0 (Do / Decide / Exit) - read it and follow it.
+Fill the "Game facts" table of docs/PROJECT_STATE.md as you go (revision hashes, TU,
+modules). Continue with /codegen-triage.

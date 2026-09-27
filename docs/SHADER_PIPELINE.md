@@ -11,7 +11,7 @@ One command: `bash tools/shaders/build_corpus.sh` (~40 s for ~600 shaders).
    (raw containers only: engines that compress their shader packages, e.g. UE3, need the
    runtime harvest from the CreateShader hooks (a cvar-gated dump to add in
    shader_registry.cpp) or the engine's decompression first;
-   docs/ANY_GAME_CHECKLIST.md §1)
+   docs/ANY_GAME_CHECKLIST.md §3)
    for shader containers (Conan: all 1800 in `shaders/shaders.stx`, 591 unique; 1659 of
    them start at an offset % 4 == 1 - do not assume alignment).
 4. `join_runtime_cache.py`: join with the Xenos backend's runtime shader storage
