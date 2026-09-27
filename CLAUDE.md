@@ -30,6 +30,13 @@ Session start: `docs/PROJECT_STATE.md` (phase, next actions), latest
 `docs/EXPERIMENT_LOG.md` entries, `docs/OPEN_QUESTIONS.md`, `port/docs/error_log.md`,
 `git log`; then resume the highest-value unfinished action. Do not ask what to do next.
 
+Toolchain: everything lives in `tools/toolchain/`, installed by
+`bash scripts/setup_toolchain.sh --accept-microsoft-license` (phase 0; re-run it whenever a
+tool is missing). Shell state does not persist between commands: kit scripts load the
+environment themselves; prefix direct clang/cmake/ninja/python calls with
+`source scripts/dev_env.sh && `. If a setup step fails, fix the script, never install
+system-wide.
+
 ## Non-negotiable engineering rules
 1. Evidence before claims and fixes: disassembly, generated code, runtime values, logs.
    Label hypotheses. One root-cause class per iteration.
