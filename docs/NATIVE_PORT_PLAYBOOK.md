@@ -25,7 +25,9 @@ _research/upstream/     local mirrors: XenosRecomp, reblue(-XenosRecomp), Unleas
 
 ## Phase 0 - Bootstrap (hours)
 
-1. `source scripts/dev_env.sh`; verify clang/ninja/cmake/python (docs/TOOLCHAIN_SETUP.md).
+1. `source scripts/dev_env.sh`; verify clang/ninja/cmake/python (docs/TOOLCHAIN_SETUP.md). If
+   `sdk/thirdparty/` holds only `CMakeLists.txt` (kit cloned from GitHub), run
+   `bash scripts/restore_sdk_thirdparty.sh` first.
 2. Inventory `game/`: default.xex (+ any .xex/.dll modules), size, SHA-256 of the XEX
    (record it; never modify the original - copy to patch). Title ID from the XEX header
    (or later from the log). Go through docs/ANY_GAME_CHECKLIST.md §1: title update
@@ -60,8 +62,15 @@ Exit: kit.env filled, project initialized, state docs exist, git checkpoint.
    function / data / jump table) with the disassembly; fix in the manifest with evidence
    comments (LESSONS_LEARNED B). One root-cause class per iteration.
 3. `python scripts/port/find_cross_file_gotos.py port/generated/default` before building.
+4. setjmp/longjmp (correctness, not an optimization): the first codegen produces
+   `<game>_register.cpp`; with it and the decoded image run `tools/re/xdk_sigs.py match`
+   and, for late-XDK games, `tools/re/xdk_layout.py` to find `setjmp`, `longjmp` and the
+   `__savegprlr`/`__restgprlr` helpers; confirm in the disassembly, add `setjmp_address` /
+   `longjmp_address` to the manifest and regenerate (docs/ANY_GAME_CHECKLIST.md §1). Keep
+   the `[rexcrt]` candidates the same tools report for phase 3.
 
-Exit: 0 analysis errors without --force; manifest overrides each commented with evidence.
+Exit: 0 analysis errors without --force; manifest overrides each commented with evidence;
+setjmp/longjmp set (or recorded as absent from the image).
 
 ## Phase 2 - Build and boot to a first frame on the legacy Xenos path (1-2 days)
 
@@ -91,6 +100,15 @@ the first EXPERIMENT_LOG entries. Apply the SDK-level legacy fixes if the kit SD
 Finish with the bound classification (PERFORMANCE_GUIDE.md §"Where is the frame bound?"):
 record the guest ceiling; it decides which optimizations are worth anything later.
 
+**Codegen optimization window (end of phase 3).** Changes that regenerate the recompiled
+code are cheapest now: the legacy baseline and guest ceiling exist to measure them, and
+every later native A/B will already include them. If the game is guest-bound (usual), apply
+with paired runs, one group per codegen: G14 `[rexcrt]` memory/string group -> G1 flags one
+at a time (`skip_lr` last, only if no hook reads LR) -> G14 heap group. Each group must keep
+menus, gameplay, save/load, FMV and a repro_freeze run clean; revert a group that does not.
+Record numbers in BENCHMARKS.csv. Anything not done here can still be done in phase 8, at
+the cost of re-running the native A/B set.
+
 ## Phase 4 - Renderer archaeology + capture (1-3 days)
 
 1. `tools/re/xdk_sigs.py match` -> XDK function table; confirm each hook target.
@@ -107,6 +125,9 @@ record the guest ceiling; it decides which optimizations are worth anything late
 XenosRecomp; fix new translator failures in `tools/xenosrecomp/src` and regenerate the
 patch (`git diff > ../patches/0001-conan-recomp.patch` from src/). Wire the DXIL pack
 into CMake (RCDATA 2).
+If the scan finds few containers (shaders inside compressed packages, e.g. UE3), add a
+cvar-gated container dump to the CreateShader hooks and harvest them over the scenario set,
+or decompress the engine's packages first (ANY_GAME_CHECKLIST §1).
 
 ## Phase 6 - Native renderer bring-up (1-2 weeks)
 
@@ -132,7 +153,8 @@ busy-wait removal (fps cap CPU), PSO precompile + embedded base, x86-64-v3, memo
 guest functions if profiled. Measure every step (opt_baseline.sh, paired runs).
 Then re-classify the bound and apply only the gated optimizations whose gate is met
 (PERFORMANCE_GUIDE.md §"Gated optimizations"). On a guest-bound game (the usual case):
-G14 native CRT ([rexcrt]) -> G1 codegen register-locality flags -> G2 guest XDK D3D cost -> G11 PGO. Renderer/GPU-side
+G14 / G1 if not already applied in the phase-3 codegen window -> G2 guest XDK D3D cost ->
+G11 PGO -> G12 thread placement. Renderer/GPU-side
 items (resolve elision, vertex fetch in shader, parallel recording) only when the
 classification says renderer- or GPU-bound.
 

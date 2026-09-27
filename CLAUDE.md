@@ -97,7 +97,11 @@ recompiled game + statically linked XDK D3D (untouched)
 -> `/renderer-archaeology` (+ `/xdk-hook-discovery`) -> `/gpu-capture` -> `/shader-pipeline`
 -> `/native-renderer` -> `/native-graphics-system` -> `/visual-validation` ->
 `/performance-pass` -> `/settings-launcher` -> `/release` ; `/autonomous-loop` whenever the
-next step is not explicit. Revisit phases when evidence requires it.
+next step is not explicit. Helpers: `/local-environment` (toolchain check/repair),
+`/xdk-hook-discovery` tools also serve phase 1 (setjmp/longjmp, `[rexcrt]` candidates),
+`/upstream-research` for a concrete question other ports may have answered. The codegen
+optimization window sits at the end of `/baseline-profile` (playbook phase 3). Revisit
+phases when evidence requires it.
 
 ## Subagents
 Use the project agents for independent workstreams when the user asks for parallel work or

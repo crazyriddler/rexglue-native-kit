@@ -10,6 +10,7 @@ description: Phase 2: build, boot and fix runtime crashes/hangs until menus, gam
    - `[FATAL] Call to invalid or unregistered function` -> verify code in the disassembly, add a boundary override (register a whole visible thunk family at once);
    - guest AV -> symbolize, read generated code, supply missing assets or guard to the function's own bail-out (never to a loop head);
    - SDK native crash -> real fix in sdk/, documented;
-   - hang -> hang watchdog / ProcDump + windbg-tool host stacks; intermittent -> bench/repro_freeze.sh.
+   - hang -> hang watchdog / ProcDump + windbg-tool host stacks; intermittent -> bench/repro_freeze.sh;
+   - timing-dependent crash/glitch -> first classify with `--ignore_thread_priorities=false --ignore_thread_affinities=false` (ReXGlue ignores guest priorities/affinities by default); a submit-order race gets a fix at its submitter, not only a guard (LESSONS_LEARNED C).
 4. One fix per run; record in port/docs/error_log.md.
 5. Build scripted scenarios (bench/scenario_*.txt) and the bench save in bench/userdata_template.

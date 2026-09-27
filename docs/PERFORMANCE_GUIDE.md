@@ -83,7 +83,7 @@ in BENCHMARKS.csv (`guest_ceiling_ms`, `worker_busy_pct`, `gpu_ms`).
 | frame within ~5% of the guest ceiling | **guest code** (Conan: 4.03 vs 3.97 ms) | checklist items 7, 9, 10; then G14 native CRT, G1 codegen flags, G2 XDK D3D cost, G11 PGO, G3 occlusion |
 | frame >> ceiling, worker busy ~ frame | **recording worker** | profile the worker; G6 vertex fetch in shader if SwapBufferRange/upload dominate; G7 texture decode off the worker; G5 parallel recording last |
 | gpu_ms ~ frame | **GPU** | per-pass timing; G4 resolve elision; the pass's own cost (MSAA, shadow size, enhancement) |
-| hitches only | **one-off work** | PSO (compiled-in-play counter), texture decode ms, upload overflow pages, guest loads |
+| hitches only | **one-off work** | PSO (compiled-in-play counter -> G13), texture decode ms (G7), upload overflow pages, guest loads; Present blocks during loads (G12 present-thread priority) |
 | CPU at a frame cap too high | **busy-waits** | checklist item 7, `tools/profile_threads.py` active leaves per thread |
 
 Renderer-side optimizations on a guest-bound game do not move the frame: do not start them.
@@ -96,7 +96,7 @@ Evaluation of where these come from: docs/STRATEGY_REVIEW.md.
 
 | ID | Optimization | Gate (start only if...) | Risk / validation |
 |---|---|---|---|
-| G1 | Codegen register locality (UnleashedRecomp ships all on, The Darkness all off as a correctness profile): manifest `ctr_as_local`, `xer_as_local`, `reserved_as_local`, `cr_as_local`, `non_argument_as_local`, `non_volatile_as_local`, `skip_msr`; `skip_lr` last (`sdk/src/codegen/config.cpp`) | guest-bound (the usual case) | Enable one flag per codegen+build; A/B scenarios, long session, repro_freeze. `skip_lr` breaks hooks that read `ctx.lr` (E026). setjmp/longjmp handled by codegen, still test save/load and FMV |
+| G1 | Codegen register locality (UnleashedRecomp ships all on, The Darkness all off as a correctness profile): manifest `ctr_as_local`, `xer_as_local`, `reserved_as_local`, `cr_as_local`, `non_argument_as_local`, `non_volatile_as_local`, `skip_msr`; `skip_lr` last (`sdk/src/codegen/config.cpp`) | guest-bound (the usual case); preferred window: end of phase 3 (playbook) | Enable one flag per codegen+build; A/B scenarios, long session, repro_freeze. `skip_lr` breaks hooks that read `ctx.lr` (E026). setjmp/longjmp handled by codegen, still test save/load and FMV |
 | G2 | Cut guest XDK D3D work (the originals the hooks call) | XDK D3D range > ~15% of render-thread samples | Dirty-mask constant path (skate3 `SetPending_*`), or replace XDK functions whose PM4 the mirror does not need; feed fences per Q-R5. Full A/B |
 | G3 | Native occlusion queries, results one frame late | capture shows occlusion queries AND native draws/frame > legacy draws/frame | Game-visible (it changes what the game submits); compare draw counts and A/B |
 | G4 | Resolve elision (sample the host RT instead of copying) | GPU-bound or `resolve_copy_mb` large at 4K / handheld | Only full-surface, same-format, non-MSAA resolves whose source is not re-rendered before the read; keep the copy path as fallback cvar |
@@ -109,7 +109,7 @@ Evaluation of where these come from: docs/STRATEGY_REVIEW.md.
 | G11 | clang PGO on the recompiled code | guest-bound, after G1 | Keep `-ffp-contract=off`; profile on several scenarios, not one; paired runs. Darkness found ThinLTO gave nothing: measure, do not assume |
 | G12 | Host thread placement: guest hardware threads on distinct physical cores (CPU Sets), present thread ABOVE_NORMAL | Present blocks / hitches at loads with cores saturated, or a guest worker sharing an SMT sibling with the engine thread | Scheduling only, guest semantics unchanged; Darkness: priority fixed 1.3 s Present stalls, core mapping gave no gain |
 | G13 | Load-time PSO precompile: at the CreateShader hook, enqueue recorded PSOs using that shader at high priority; optionally hold the game's loading flag until they finish (UnleashedRecomp) | cold precompile at startup too long (thousands of PSOs) or PSOs compiled in play after a level load | Never skip a draw; holding a loading flag needs the engine's flag found per game |
-| G14 | Native CRT: `[rexcrt]` for memcpy/memset/str*/wcs*/XMemCpy (then Rtl*Heap group + `rexcrt_heap_enable`, file I/O) | guest-bound and CRT functions visible in the render/game thread profile (expected: recompiled PPC memcpy/memset loops are much slower than host ones; measure the share first) | Codegen change; verify each address (xdk_layout.py or semantics), A/B + long session + save/load; heap group last (allocator change: watch RAM) |
+| G14 | Native CRT: `[rexcrt]` for memcpy/memset/str*/wcs*/XMemCpy (then Rtl*Heap group + `rexcrt_heap_enable`, file I/O) | guest-bound and CRT functions visible in the render/game thread profile (expected: recompiled PPC memcpy/memset loops are much slower than host ones; measure the share first); preferred window: end of phase 3 (playbook) | Codegen change; verify each address (xdk_layout.py or semantics), A/B + long session + save/load; heap group last (allocator change: watch RAM) |
 
 Rejected outright (see STRATEGY_REVIEW.md): reordering/sorting draws, GPU culling of draws
 the game submitted, placeholder PSOs, mapping states to "nearest canonical" PSOs, physical

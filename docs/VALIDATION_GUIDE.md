@@ -82,7 +82,7 @@ bottleneck.
 | Gate | Source |
 |---|---|
 | A/B >= 45 dB on every scenario swap | ab_multi.sh |
-| 0 PSOs compiled during play (after precompile) on the scenario set | "PSO #n created" log lines after startup |
+| 0 PSOs compiled during play (after precompile) on the scenario set | "PSO #n created" log lines (written only for pipelines not served by the cache); Release logs are off: use the dev build or `--log_level=debug --log_file=<name>` |
 | 0 frames > 50 ms outside loading screens | perf CSV + scenario timeline |
 | 0 hangs in `repro_freeze.sh` N runs + long session | watchdog |
 | CPU at the frame cap not worse than the previous release (paired) | opt_baseline.sh |

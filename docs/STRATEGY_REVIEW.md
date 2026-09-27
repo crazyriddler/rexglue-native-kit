@@ -53,7 +53,7 @@ correctness or with evidence; **Done** = the kit already does it (sometimes bett
 | 3 "conan_pipelines.bin is fragile / tied to driver" | - | **Wrong premise** | The file holds pointer-free PSO *descriptions* (inputs), machine-independent; the driver's own cache holds the blobs. That is exactly the proposal's "layer 2" |
 | 3.1 L1 | `ID3D12PipelineLibrary` driver blobs on disk | **Gated** (G8) | Warm driver cache already gives 0.05 ms median creation (EXP-044). Worth it only if cold-start precompile time (1.6 s for 121 PSOs) grows large for a game with thousands of PSOs, or driver caches are observed to be evicted |
 | 3.1 L3 | Parallel startup precompile | **Done** | 1-4 below-normal threads, embedded base + local file (EXP-044) |
-| 3.1 L4 | Placeholder PSO, never block the frame | **Reject** | EXP-005: skipping or substituting a draw once can break the game permanently (exposure init feedback draw -> black scene). A wrong PSO for one frame is also a visible glitch. Correct answer: coverage (save packs, EXP-049/050 technique) + a **release gate "0 PSOs compiled during play"** (VALIDATION_GUIDE) |
+| 3.1 L4 | Placeholder PSO, never block the frame | **Reject** | EXP-005: skipping or substituting a draw once can break the game permanently (exposure init feedback draw -> black scene). A wrong PSO for one frame is also a visible glitch. Correct answer: coverage (save packs and generated saves, PERFORMANCE_GUIDE checklist item 8) + a **release gate "0 PSOs compiled during play"** (VALIDATION_GUIDE) |
 | 3.2 | PSO streams, minimize variation, canonical blend set | **Partial** | Streams: cosmetic. "Map to the nearest canonical state" = **Reject** (changes pixels). Removing the input layout from the PSO key is the real variation reducer -> G6 |
 | 3.3 | XXH3 PSO hash, reserved map | **Done** | |
 | 4.1 | Instancing detection, ExecuteIndirect batches | **Reject for XDK-era titles / Gated** (G5) | Per-draw constants differ, order matters, CPU cost is not in submission. Revisit only for a game with >3k draws and a worker on the critical path |
@@ -158,11 +158,14 @@ Ranked by expected gain on a guest-bound port. All are measurement-gated.
 
 ## 5. Resulting backlog for the next port (in order)
 
-1. Phases 0-7 unchanged (they produced a 47-58 dB native renderer in ~3 weeks).
-2. Phase 3 baseline now ends with the **bound classification** and records the guest
-   ceiling in BENCHMARKS.csv.
+1. Phases 0-7 keep the Conan method (47-58 dB native renderer in ~3 weeks), with these
+   additions from the later research: phase 0 answers ANY_GAME_CHECKLIST §1 (title update,
+   modules, revision hashes); phase 1 sets setjmp/longjmp; phase 4 records the renderer
+   strategy decision; phase 5 handles shaders in compressed packages.
+2. Phase 3 baseline now ends with the **bound classification** (guest ceiling in
+   BENCHMARKS.csv) and the **codegen optimization window**.
 3. Phase 6 adds the cheap hardening: DRED, PIX pass markers, NOT_ZEROED, RS 1.1.
-4. Phase 8 order: the Conan checklist -> G14 native CRT -> G1 codegen flags -> G2 XDK D3D cost -> G11 PGO ->
+4. Phase 8 order: the Conan checklist -> any G14/G1 left -> G2 XDK D3D cost -> G11 PGO ->
    renderer-side gated items only if the classification says renderer/GPU bound.
 5. Tooling investments that pay across games: shader numeric harness, capture replay,
    native golden dumps, release gates, `game_profile` consolidation at game #2.
@@ -172,8 +175,10 @@ Ranked by expected gain on a guest-bound port. All are measurement-gated.
 | Status | What |
 |---|---|
 | Proven on one game (Conan, XDK 2.0.5632) | Phases 0-10 of the playbook, the reference renderer, NativeGraphicsSystem, PSO precompile, launcher, release tooling, every LESSONS_LEARNED row |
-| Documented, never run | G1-G11 gated optimizations, §8 hardening of NATIVE_RENDERER_ARCHITECTURE, shader numeric harness, native golden dumps, capture replay, scripted release gates, `game_profile` |
-| Expected to differ on the next game | XDK revision (xdk_sigs.py `fuzzy`/`missing` -> semantic discovery), engine pass structure, formats/primitive/packet types Conan never used (log once, implement), MEMEXPORT, 3D texture mips, multiple XEX/DLL modules, 60 fps titles (vblank per frame), shader heuristics keyed by Conan sampler names |
+| Proven elsewhere, not yet in this kit | `[rexcrt]` (6 surveyed ReXGlue ports), setjmp/longjmp addresses (11 of 12), codegen register-locality flags (UnleashedRecomp, TiP), load-time PSO gating (reblue, UnleashedRecomp), native occlusion queries (reblue), clear-rect coalescing (LostOdysseyRecomp) |
+| Unit-tested only | `tools/re/xdk_layout.py` (synthetic layout, `scripts/tests/test_xdk_layout.py`); SDK sraw/srad carry fix (`scripts/tests/test_codegen_sra.py`, no game run with it yet) |
+| Documented, never run | G1-G14 as a set on a kit port, §8 hardening of NATIVE_RENDERER_ARCHITECTURE, shader numeric harness, native golden dumps, capture replay, scripted release gates, `game_profile`, handheld affinity proxy runs |
+| Expected to differ on the next game | XDK revision (xdk_sigs.py `fuzzy`/`missing` -> semantic discovery), engine pass structure, formats/primitive/packet types Conan never used (log once, implement), MEMEXPORT, 3D texture mips, multiple XEX/DLL modules, 60 fps titles (vblank per frame), shader heuristics keyed by Conan sampler names, shaders stored in compressed packages (UE3), late-XDK function names (xdk_layout.py) |
 
 The first time an untested item is used, record it as an EXP entry with numbers and move it
 to "proven" (or record why it was dropped).

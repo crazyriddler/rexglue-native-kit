@@ -7,11 +7,11 @@ nativo D3D12, usando lo aprendido en el port de Conan (2007).
 
 | Carpeta | Contenido |
 |---|---|
-| `sdk/` | Nuestra versión de ReXGlue v0.10.0 (rama native-render), lista para compilar sin descargas |
+| `sdk/` | Nuestra versión de ReXGlue v0.10.0 (rama native-render). En tu copia local está completa; en un clon de GitHub faltan las dependencias `sdk/thirdparty/` (unos 400 MB, no se suben): `bash scripts/restore_sdk_thirdparty.sh` las descarga en las versiones exactas y aplica los parches del kit |
 | `game/` | **Aquí va el juego**: `default.xex` y todas sus carpetas de datos, sin recompilar |
-| `docs/` | La base de conocimiento: guía por fases, lecciones aprendidas (problema -> causa -> solución), arquitectura del render nativo, notas del XDK, shaders, rendimiento, validación, launcher y release, toolchain |
+| `docs/` | La base de conocimiento: guía por fases, lecciones aprendidas (problema -> causa -> solución), arquitectura del render nativo, notas del XDK, shaders, rendimiento (con optimizaciones condicionadas G1-G14), validación, launcher y release, toolchain; `ANY_GAME_CHECKLIST.md` (qué cambia de un juego a otro, con lo aprendido de otros ports: UnleashedRecomp, skate3, The Darkness, reblue, Lost Odyssey, AC6...) y `STRATEGY_REVIEW.md` (qué ideas de optimización aplican y cuáles no) |
 | `reference/conan/` | El port de Conan completo como ejemplo: código fuente, manifiesto comentado, registro de errores E001-E051 y experimentos EXP-001-048 |
-| `tools/` | Herramientas de benchmark, perfilado, comparación de imágenes y shaders (XenosRecomp parcheado, DXC), análisis del ejecutable (incluido `xdk_sigs.py`, que encuentra solo las funciones D3D del XDK en un juego nuevo) y creación de la release |
+| `tools/` | Herramientas de benchmark, perfilado, comparación de imágenes y shaders (XenosRecomp parcheado, DXC), análisis del ejecutable (`xdk_sigs.py` encuentra las funciones D3D del XDK de la época de Conan; `xdk_layout.py` + la tabla de Dance Central 3 nombra funciones D3D/CRT, `setjmp`/`longjmp` incluidas, en juegos con XDK tardío) y creación de la release |
 | `bench/` | Scripts para lanzar el juego de forma automática y reproducible, comparación A/B fotograma a fotograma y medición de rendimiento |
 | `scripts/` | Entorno del compilador (`dev_env.sh`) y utilidades del port (descifrado del XEX, detectores de errores de codegen...) |
 | `.claude/` | Agentes y skills de Claude Code actualizados con este proceso |
@@ -30,9 +30,9 @@ nativo D3D12, usando lo aprendido en el port de Conan (2007).
 ## Qué hará Claude, por fases (detalle en `docs/NATIVE_PORT_PLAYBOOK.md`)
 
 0. Prepara el proyecto: comprueba el compilador, rellena `kit.env`, compila la herramienta `rexglue` y crea el proyecto con `rexglue init`.
-1. Recompila el ejecutable sin errores de análisis (codegen).
+1. Recompila el ejecutable sin errores de análisis (codegen), con el title update aplicado si existe y las direcciones de `setjmp`/`longjmp`.
 2. Compila, arranca y corrige los cierres hasta tener menús, partida, guardado y vídeos con el render emulado (Xenos).
-3. Mide el rendimiento de base.
+3. Mide el rendimiento de base, decide qué limita el frame y aplica las optimizaciones de codegen (CRT nativa `[rexcrt]`, flags de registros) mientras aún es barato revalidarlas.
 4. Localiza las funciones gráficas del juego y del XDK.
 5. Traduce todos los shaders a DXIL por adelantado.
 6. Crea el render nativo a partir del de Conan, comparándolo fotograma a fotograma con Xenos.

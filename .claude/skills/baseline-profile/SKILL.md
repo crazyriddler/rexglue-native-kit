@@ -10,3 +10,5 @@ Follow docs/PERFORMANCE_GUIDE.md. Scenario runs with bench/run_safe.sh, window t
 End with the bound classification (docs/PERFORMANCE_GUIDE.md §"Where is the frame bound?"):
 guest ceiling, worker busy, GPU time. Record BENCHMARKS.csv (incl. guest_ceiling_ms) +
 EXPERIMENT_LOG; rank bottlenecks in OPEN_QUESTIONS; continue.
+Then the codegen optimization window (docs/NATIVE_PORT_PLAYBOOK.md end of phase 3): G14 [rexcrt]
+and G1 flags one group per codegen, paired runs, keep only clean wins.

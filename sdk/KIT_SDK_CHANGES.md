@@ -1,7 +1,7 @@
 # This SDK: ReXGlue v0.10.0 fork used by the native-port kit
 
 Source: `C:\Users\jrbar\rexglue-sdk native-render`, branch `native-render`, commit
-d859ff6 (2026-09-26), on top of ReXGlue v0.10.0 (the original clone at
+d859ff6 (2026-09-26), on top of ReXGlue v0.10.0 (upstream `main` `c94f5eb` = tag `v0.10.0` `f5337cd` + 2 commits; the original clone at
 `C:\Users\jrbar\rexglue-sdk` is untouched and must stay so). Submodules are vendored
 (no .git); the libmspack/moltenvk/o1heap symlink placeholders are already fixed.
 
@@ -13,7 +13,9 @@ Runtime / performance
 - High-resolution timing: `timeBeginPeriod(1)`, waitable-timer sleeps, vblank worker that
   waits out the interval and delivers at most one vblank per wake (E049).
 - TimerQueue uses a blocking wait strategy (was spinning ~18% of a core); the vendored
-  disruptorplus `wait_until` argument order fixed (EXP-040).
+  disruptorplus `wait_for`/`wait_until` argument order fixed (EXP-040). Kept as
+  `sdk/patches/thirdparty/0001-disruptorplus-wait-arg-order.patch` because `thirdparty/*/`
+  is not in git; `scripts/restore_sdk_thirdparty.sh` re-applies it on a fresh clone.
 - Occlusion queries resolved one frame late, never waiting on the GPU (E050).
 - `clear_memory_page_state` default false (E051); `readback_memexport` default false;
   primitive processor cache min 4096 indices; quad lists as triangle lists (E048).

@@ -10,12 +10,22 @@ reinstall. `scripts/dev_env.sh` wires it together from the paths in `kit.env`.
 | Ninja | `%APPDATA%\Python\Python314\Scripts\ninja.exe` | `python -m pip install --user ninja` |
 | CMake >= 3.25 | on PATH | - |
 | Python 3.14 + numpy, Pillow, xxhash, pycryptodome | on PATH | `pip install --user numpy pillow xxhash pycryptodome` |
-| DXC v1.9.2607 | `tools/dxc` (in the kit) | `tools/shaders/build_corpus.sh` downloads it if missing |
+| DXC v1.9.2607 | `tools/dxc` (local; gitignored) | `tools/shaders/build_corpus.sh` downloads it if missing |
 | PowerPC binutils (objdump) | `tools/binutils` (in the kit) | - |
 | ProcDump | `C:\Users\jrbar\tools\procdump` | Sysinternals zip |
 | DbgEng debugger (`windbg-tool.exe`) | `C:\Users\jrbar\tools\windbgtool` | NuGet package `devolutions.windbg.tool.win-x64` (plain zip), MCP-style tools over dumps/live processes |
 | RenderDoc 1.37 portable | `C:\Users\jrbar\tools\renderdoc` | Launch under `renderdoccmd capture` from process start (late inject does not hook D3D12) |
 | Visual C++ redistributable DLLs (release folder) | `C:\Program Files\Microsoft Visual Studio\2022\*\VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT` | `kit.env VC_REDIST_GLOB` |
+
+## SDK third-party code (fresh clone only)
+
+`sdk/thirdparty/*/` (~400 MB of vendored dependencies, no submodules) is gitignored, so a
+kit cloned from GitHub has only `sdk/thirdparty/CMakeLists.txt`. Run
+`bash scripts/restore_sdk_thirdparty.sh` once: it fetches every entry at the commit the
+SDK base (`c94f5eb`) pins, removes `.git` (vendored layout), fixes symlink placeholders on
+Windows and applies the kit patches in `sdk/patches/thirdparty/` (today: the disruptorplus
+`wait_for`/`wait_until` argument order, EXP-040). Existing non-empty entries are never
+touched. A local kit that already has `sdk/thirdparty/` needs nothing.
 
 ## Build configurations
 

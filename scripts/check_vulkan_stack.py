@@ -94,9 +94,16 @@ def apply_fix(repo_root: Path, mismatches: list[Mismatch]) -> None:
         print(f"moved {mismatch.submodule} to {mismatch.expected}")
 
 
+def default_repo_root() -> Path:
+    """The SDK root: `sdk/` inside the native-port kit, else this script's repository."""
+    here = Path(__file__).resolve().parents[1]
+    kit_sdk = here / "sdk"
+    return kit_sdk if (kit_sdk / STACK_FILE).exists() else here
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--repo-root", type=Path, default=default_repo_root())
     parser.add_argument("--fix", action="store_true", help="check the pinned commits out")
     args = parser.parse_args()
 
@@ -104,6 +111,13 @@ def main() -> int:
     if not config.pins:
         print(f"error: no pins found in {STACK_FILE}", file=sys.stderr)
         return 1
+
+    if not (args.repo_root / ".git").exists():
+        # The kit vendors the SDK's third-party code without submodules (sdk/KIT_SDK_CHANGES.md),
+        # so there are no gitlinks to compare; only a git checkout of the SDK can be checked.
+        print(f"{args.repo_root}: vendored SDK without submodules, pins not checkable "
+              f"(stack file lists SDK {config.sdk_version})")
+        return 0
 
     actual = read_gitlinks(args.repo_root, list(config.pins))
     mismatches = evaluate(config, actual)

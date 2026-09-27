@@ -5,13 +5,14 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from check_vulkan_stack import STACK_FILE, StackConfig, evaluate, parse_stack_config
+from check_vulkan_stack import STACK_FILE, StackConfig, default_repo_root, evaluate, parse_stack_config
 
 SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
 def real_config() -> StackConfig:
-    return parse_stack_config((REPO_ROOT / STACK_FILE).read_text(encoding="utf-8"))
+    # In the kit the SDK (and its stack file) lives under sdk/.
+    return parse_stack_config((default_repo_root() / STACK_FILE).read_text(encoding="utf-8"))
 
 
 def test_parses_the_shipped_stack_file():
