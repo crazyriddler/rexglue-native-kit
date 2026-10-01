@@ -95,5 +95,6 @@ hang, no enhancement enabled by default.
 | Why some popular optimizations are rejected; proven vs untested | STRATEGY_REVIEW.md |
 | Other projects: index, evidence and file references | UPSTREAM_RESEARCH.md |
 | Local workspace contract (no remote required) | LOCAL_WORKSPACE.md |
+| Notes on a specific title (traps already met; e.g. Call of Duty 3 level DLLs) | games/ |
 | Per-game state files to copy in phase 0 | templates/ |
 | The complete worked example | reference/conan/ |

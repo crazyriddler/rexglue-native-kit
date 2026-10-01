@@ -22,7 +22,7 @@ tools/                  bench/profiling/capture tools, shaders/, xenosrecomp/, r
                         toolchain/ (LLVM, xwin CRT/SDK, CMake, Ninja, Python, VC++ runtime; setup_toolchain.sh)
 scripts/                setup_toolchain.sh, dev_env.sh, restore_sdk_thirdparty.sh, port/ (xex decode, codegen scanners), tests/
 reference/conan/        the complete worked example (sources, manifest, docs, logs) - read-only
-docs/                   knowledge base + templates/ for the per-game state files
+docs/                   knowledge base, templates/ for the per-game state files, games/ notes on specific titles
 artifacts/, release/    generated (captures, profiles, shaders; portable release folders)
 _research/upstream/     disposable clones of other projects (gitignored)
 ```
@@ -41,7 +41,8 @@ _research/upstream/     disposable clones of other projects (gitignored)
    `dev_env.sh` themselves; direct clang/cmake/python calls need `source scripts/dev_env.sh && ...`.
    An `sdk/thirdparty/<name>` entry missing or empty
    (should not happen, it is in git): `bash scripts/restore_sdk_thirdparty.sh <name>`.
-2. Inventory `game/`: default.xex, extra .xex/.dll modules, `.xexp` title update, sizes,
+2. If `docs/games/` has a file for this title, read it now (known traps of that game).
+   Inventory `game/`: default.xex, extra .xex/.dll modules, `.xexp` title update, sizes,
    SHA-256 of every executable (never modify the originals). Title ID from the XEX header or
    later from the log ("Initializing shader storage for title").
 3. Fill `kit.env`: GAME_NAME (lowercase, no spaces), TITLE_ID, GUEST_WIDTH/HEIGHT.
