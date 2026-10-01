@@ -51,9 +51,12 @@ _research/upstream/     disposable clones of other projects (gitignored)
 5. `mkdir port && mv game port/game` (recreate `game/README.md`), then from `port/`:
    `../sdk/out/win-amd64/Release/rexglue.exe init --project-name $GAME_NAME --xex-path
    game/default.xex --game-root game --project-root . [--scan-dll]`, then `mkdir -p logs`
-   (`port/logs/` holds images, disassembly and codegen logs). `--scan-dll` adds `.dll`
-   modules only; add any other module (e.g. an extra `.xex`) with
-   `rexglue.exe init module --project-root . --xex-path game/<m>.xex --guest-path "game:\<m>.xex"`.
+   (`port/logs/` holds images, disassembly and codegen logs). `--scan-dll` adds every `.dll`
+   under the game root, subfolders included (guest path = path under the game root). Add any
+   other module that loads into the same process with (the parent `init` options are required
+   too) `rexglue.exe init --project-name $GAME_NAME --xex-path game/default.xex module
+   --project-root . --xex-path game/<m>.xex --guest-path "game:\<m>.xex"`. A second executable
+   (`module_flags` without DLL, same base `0x82000000`, e.g. a multiplayer exe) is not a module.
 6. From the kit root: `cp docs/templates/* docs/ && mkdir -p port/docs && mv docs/error_log.md
    port/docs/` (the error log belongs to the port).
    `git init` only if the kit is not already a repository; commit (game data is gitignored).
