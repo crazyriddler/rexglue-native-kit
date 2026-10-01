@@ -16,7 +16,8 @@ reblue, skate3recomp, The Darkness Recomp, LostOdysseyRecomp, AC6_recomp and mor
 
 ## Quick start
 
-1. Copy or clone this repository to a new folder per game (a path without spaces is best).
+1. Copy or clone this repository to a new folder per game, on a path with only ASCII characters
+   and no spaces (the code generator crashes on non-ASCII paths).
    Keep a pristine copy of the kit as a template.
 2. Put the game in `game/`: `default.xex`, any other `.xex`/`.dll` modules and all data
    folders, as extracted from the disc (see `game/README.md` for title updates).

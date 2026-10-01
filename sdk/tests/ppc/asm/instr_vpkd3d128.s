@@ -256,3 +256,49 @@ test_vpkd3d128_float16_4_0:
   blr
   #_ REGISTER_OUT v3 [3F000000, BF000000, 3F800000, BF800000]
   #_ REGISTER_OUT v4 [CDCDCDCD, CDCDCDCD, 3800B800, 3C00BC00]
+
+# In-place packs (vD == vB): the builder must read every source lane before writing any
+# destination halfword (VivaPinataRecomp: `vpkd3d128 v0,v0,5,2,2` lost the sign of x).
+# Encoding: 0x18000610 | vD<<21 | (type<<2|mask)<<16 | vB<<11 | shift<<6.
+test_vpkd3d128_float16_4_inplace_0:
+  #_ REGISTER_IN v3 [3F000000, BF000000, 3F800000, BF800000]
+  # vpkd3d128 v3, v3, 5, 2, 0
+  .long 0x18761E10
+  blr
+  #_ REGISTER_OUT v3 [3F000000, BF000000, 3800B800, 3C00BC00]
+test_vpkd3d128_float16_4_inplace_1:
+  #_ REGISTER_IN v3 [3F000000, BF000000, 3F800000, BF800000]
+  # vpkd3d128 v3, v3, 5, 2, 1
+  .long 0x18761E50
+  blr
+  #_ REGISTER_OUT v3 [3F000000, 3800B800, 3C00BC00, BF800000]
+test_vpkd3d128_float16_4_inplace_2:
+  #_ REGISTER_IN v3 [BF000000, BF000000, 3F800000, BF800000]
+  # vpkd3d128 v3, v3, 5, 2, 2
+  .long 0x18761E90
+  blr
+  #_ REGISTER_OUT v3 [B800B800, 3C00BC00, 3F800000, BF800000]
+test_vpkd3d128_float16_2_inplace_2:
+  #_ REGISTER_IN v3 [BF000000, BF000000, 3F800000, BF800000]
+  # vpkd3d128 v3, v3, 3, 1, 2
+  .long 0x186D1E90
+  blr
+  #_ REGISTER_OUT v3 [BF000000, B800B800, 3F800000, BF800000]
+test_vpkd3d128_float16_2_inplace_3:
+  #_ REGISTER_IN v3 [BF000000, BF000000, 3F800000, BF800000]
+  # vpkd3d128 v3, v3, 3, 1, 3
+  .long 0x186D1ED0
+  blr
+  #_ REGISTER_OUT v3 [B800B800, BF000000, 3F800000, BF800000]
+test_vpkd3d128_short4_inplace_0:
+  #_ REGISTER_IN v3 [403F8001, 403FFFF8, 4040007F, 40400000]
+  # vpkd3d128 v3, v3, 4, 2, 0
+  .long 0x18721E10
+  blr
+  #_ REGISTER_OUT v3 [403F8001, 403FFFF8, 8001FFF8, 007F0000]
+test_vpkd3d128_short4_inplace_1:
+  #_ REGISTER_IN v3 [403F8001, 403FFFF8, 4040007F, 40400000]
+  # vpkd3d128 v3, v3, 4, 2, 1
+  .long 0x18721E50
+  blr
+  #_ REGISTER_OUT v3 [403F8001, 8001FFF8, 007F0000, 40400000]

@@ -53,6 +53,7 @@ in Git Bash unless noted.
 | `tests/` (`python -m pytest scripts/tests`) | codegen semantics (sraw/srad), xdk_layout.py, check_vulkan_stack |
 | `port/xex_decode.py <xex> <out.bin>` | decrypt + decompress (basic compression) to a flat image at 0x82000000 |
 | `port/find_cross_file_gotos.py <generated dir>` | fall-through functions split across files |
+| `port/find_adjustor_thunks.py [--toml] [dis reg.cpp]` | every MSVC adjustor thunk (`addi r3,r3,-N; b`) codegen did not register, ranked high (packed run) / check (lone); `--toml` prints `[entrypoint.functions]` entries. Test: `scripts/tests/test_find_adjustor_thunks.py` |
 | `port/find_unregistered_after_bctr.py` | candidates for unregistered indirect-call targets (edit its two paths) |
 | `port/fix_broken_symlinks.py <git dir>` | text-file symlinks from Git without privilege |
 | `port/tga_to_dds.py` | convert an existing TGA asset to DDS for a loader that wants .dds |

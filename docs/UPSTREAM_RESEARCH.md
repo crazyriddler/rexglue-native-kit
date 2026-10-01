@@ -20,6 +20,7 @@ intentionally adapted (then note its license).
 | skate3recomp | https://github.com/mchughalex/skate3recomp | engine-level renderer, TU codegen, ultrawide frustum patch | "skate3recomp native renderer" |
 | The Darkness Recomp | https://github.com/portingpete/The-Darkness-Recomp | engine-level D3D11, XenonRecomp fixes, pacing findings, WARP tests | "The Darkness Recomp" |
 | LostOdysseyRecomp | https://github.com/freefrank/LostOdysseyRecomp | measurement discipline, clear coalescing, recompiler audit, UE3 shaders, 3C6T | "LostOdysseyRecomp" |
+| VivaPinataRecomp | https://github.com/crabinacrabic/VivaPinataRecomp | ReXGlue 0.10 nightly (Xenos renderer): vpkd3d128 codegen bug, adjustor-thunk and vtable sweeps, manifest pre-flight, language cvars, AGENTS.md install flow | "VivaPinataRecomp" |
 | AC6_recomp and 10 more ReXGlue ports | see the survey table | ReXGlue behaviour across games: [rexcrt], setjmp, thread races, TU diffing | "Survey of other ReXGlue ports" |
 | dc3-decomp | https://github.com/rjkiv/dc3-decomp | CC0 XDK symbol map -> `tools/re/xdk_2012_dc3_symbols.tsv` | "Survey of other ReXGlue ports" |
 | NX1recomp | https://github.com/goshavindtburg/NX1recomp | ReXGlue + XenosRecomp project structure, shader dump tooling (not surveyed yet) | - |
@@ -515,3 +516,33 @@ the **measurement discipline and the concrete findings** (docs/notes/, mostly Ch
   harmless for valid code; the Rc-form and high-word items remain an open audit for the kit.
 - Codegen generation guard: hashes of generator, config and outputs checked before build
   (stale generated code after a generator change was a real failure there).
+
+## VivaPinataRecomp (researched 2026-10-01)
+
+https://github.com/crabinacrabic/VivaPinataRecomp @ efb21f6 (no LICENSE: ideas only, no code
+copied). ReXGlue 0.10.0.8-dev nightly (`nightly-20260915-1406e1b7`, fetched as a release zip),
+Xenos D3D12 renderer (ROV/RTV option), Visual Studio 2026 + clang 22, launcher EN/RU.
+- **Codegen bug, fixed in the kit SDK**: `vpkd3d128` FLOAT16_4 with vD == vB lost the sign of
+  lane x (the game's float->half idiom `lvlx v0 / vpkd3d128 v0,v0,5,2,2 / vsplth / stvehx`; the
+  terrain grid folded into one quadrant). They patched 30 sites with midasm hooks; the kit fixes
+  the builder for every in-place pack type (sdk/KIT_SDK_CHANGES.md) and the test-harness bug
+  that hid half of the PPC tests.
+- **Adjustor thunks** (`tools/find_thunk_holes.py`): MSVC `addi r3,r3,-N; b` thunks reached only
+  from undiscovered vtables -> kit `scripts/port/find_adjustor_thunks.py`.
+- **Runtime sweeps** (`src/debug_tools.h`, cvar `dev_debug_runtime`): a data-pointer scan
+  (runs of code pointers in data sections = vtables; unknown targets -> new functions) and a
+  stub sweep, classified by `tools/data_pointers_to_toml.py` / `stub_sweep_to_toml.py` into
+  NEW FUNCTION / ALREADY KNOWN / MID-FUNCTION (a missed jump table, not a function). Worth
+  porting when a game has many vtable crashes.
+- **Manifest pre-flight** (`tools/validate_manifest.py`): checks includes, known keys,
+  alignment/range of addresses, size/end exclusivity, [rexcrt] names (heap group
+  all-or-nothing), setjmp/longjmp together, before a long codegen.
+- Manifest split by subsystem (`config/*_functions/_hooks/_midasm/_crt/_ctx.toml`), overrides
+  as strong `extern "C"` symbols replacing the weak generated ones (`src/game_fixes.h` header
+  lists the recipes: wrapper, replacement, typed hook, stub, call-in, midasm).
+- Timing: `timeBeginPeriod(1)` + hybrid sleep (TiP-Recomp idea), already in the kit SDK (E049).
+- Language: SDK `user_country` 103 -> the game reads `englishus.bnl` (ANY_GAME_CHECKLIST §4).
+- Gotchas: non-ASCII project path crashes codegen (0xC0000409); first-chance AVs from the
+  SDK write-watch stop debuggers (LESSONS A/C); in-place inflated archives must be rebuilt
+  with exactly the original compressed size (their `make_russian_bnl.py`), a rule for any
+  data mod.
