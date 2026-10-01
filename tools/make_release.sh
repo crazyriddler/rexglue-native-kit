@@ -2,6 +2,7 @@
 # Builds the Release configuration and assembles a clean, portable game folder:
 #   $GAME_NAME.exe        game (native renderer, shaders + pipeline base embedded)
 #   rexruntime.dll        ReXGlue runtime
+#   <GAME_NAME>_*.dll     recompiled guest modules, if the manifest has [[modules]]
 #   msvcp140*.dll, vcruntime140*.dll   Visual C++ runtime (app-local)
 #   $GAME_NAME.cfg        settings (defaults = original game), edited by the launcher
 #   data/                 game data (mirror of $PORT_DIR/game)
@@ -24,6 +25,9 @@ bash "$ROOT/bench/build.sh" "$BUILD_REL"
 
 mkdir -p "$OUT"
 for f in "$GAME_NAME.exe" rexruntime.dll; do cp -f "$BUILD/$f" "$OUT/$f"; done
+# Recompiled guest modules ([[modules]] in the manifest, e.g. level DLLs loaded through
+# XexLoadImage) are host DLLs named <GAME_NAME>_<module>.dll next to the exe.
+for f in "$BUILD/${GAME_NAME}_"*.dll; do [ -e "$f" ] && cp -f "$f" "$OUT/"; done
 if [ -n "$CRT_DIR" ]; then
   for f in msvcp140.dll msvcp140_atomic_wait.dll vcruntime140.dll vcruntime140_1.dll; do
     cp -f "$CRT_DIR/$f" "$OUT/$f"

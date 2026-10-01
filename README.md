@@ -57,7 +57,7 @@ launcher -> 10 release.
 |---|---|
 | `sdk/` | ReXGlue v0.10.0 fork (base upstream `c94f5eb`) with all its third-party code vendored (a clone builds without extra downloads); changes in `sdk/KIT_SDK_CHANGES.md`, third-party patches in `sdk/patches/thirdparty/` |
 | `game/` | Drop zone for the game (moved to `port/game` in phase 0) |
-| `docs/` | Knowledge base and `templates/` for the per-game state files |
+| `docs/` | Knowledge base, `templates/` for the per-game state files, `games/` notes on specific titles (Call of Duty 3: runtime-loaded level DLLs) |
 | `reference/conan/` | The complete worked example: port sources (native renderer, NativeGraphicsSystem, launcher), commented manifest, error log E001-E051, experiment log EXP-001-048 |
 | `tools/` | Benchmark, profiling, capture and image-comparison tools; shader pipeline (patched XenosRecomp, DXC); reverse-engineering tools (`re/xdk_sigs.py`, `re/xdk_layout.py`); release builder |
 | `bench/` | Scripted, reproducible runs; frame-exact A/B; freeze reproduction; optimization baselines |
