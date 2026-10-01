@@ -59,10 +59,32 @@ Codegen correctness
   `python -m pytest scripts/tests/test_codegen_sra.py` (renders the emitted strings, compares
   with the ISA; fails on the old code). Needs a codegen re-run of a port to take effect;
   expected impact is rare (CA consumed after a variable arithmetic shift of that value).
+- `vpkd3d128` in place (vD == vB) for FLOAT16_2 / SHORT_4 / FLOAT16_4
+  (src/codegen/builders/vector.cpp): the builder wrote vD halfword by halfword while still
+  reading later lanes and the current lane's sign from vB. FLOAT16_4 shift 2 lost the sign of
+  x; shift 0/1 (and FLOAT16_2 shift 2/3, SHORT_4 shift 0/1) read lanes already overwritten.
+  Source lanes are now read from a snapshot (`PPCVRegister vpkSrc`) when vD == vB. Found by
+  VivaPinataRecomp (`vpkd3d128 v0,v0,5,2,2`: 3/4 of the garden rendered white; they patched
+  30 call sites with midasm hooks). Needs a codegen re-run.
+- `vupkd3d128` negative overflow: -32768 (SHORT_2, SHORT_4, every lane) and -512 (y, z of
+  2_10_10_10; x already was) unpack to a quiet NaN 0x7FC00000, as on hardware
+  (`instr_vupkd3d128.s` short2_3, hidden until the parser fix below) and in Xenia
+  (x64_seq_vector.cc EmitSHORT_2/EmitSHORT_4/EmitUINT_2101010). Needs a codegen re-run.
+- Not fixed, suspect: `vpkd3d128`/`vupkd3d128` type 6 (NORMPACKED64 / 4_20_20_20) do not
+  match Xenia (no 3.0+X form, lane order); no hardware test vector exists. If a game uses
+  type 6, add a case from hardware/Xenia first.
 
 Tests (SDK self-test, docs/VALIDATION_GUIDE.md "SDK self-tests")
 - `tests/ppc/asm/instr_sraw.s`, `instr_srad.s`: sign-bit-only cases (shift 31/32/63, 63/64)
   for the carry fix; they fail on the old builder (verified 2026-09-27).
+- `src/rexglue/commands/test_recompiler.cpp` (`ParseTestSpecs`): a test written directly after
+  another one (no blank line) was silently dropped, because the REGISTER_OUT loop consumed its
+  label. 1 in 2 back-to-back tests never ran (e.g. `vpkd3d128` 35 written, 20 generated). The
+  line is now reprocessed; the suite grew from 1463 to 1489 cases and exposed the
+  `vupkd3d128` short2_3 failure above.
+- `instr_vpkd3d128.s`: 7 in-place cases (fail on the old builder);
+  `instr_vupkd3d128.s`: 4 overflow-NaN cases (fail on the old builder). 2026-10-01: all 1489
+  pass.
 - `tests/unit/core/timer_queue_test.cpp` (new): one-shot and recurring timers, and idle CPU
   of a waiting queue (< 3 ms per 500 ms; blocking strategy ~0.1 ms, upstream spin ~12.5-14.6 ms
   on Linux; fails on the upstream timer_queue.cpp).

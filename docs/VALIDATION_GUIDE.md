@@ -63,10 +63,12 @@ out/win-amd64/Release/ppc_tests      # PPC instruction semantics through the rea
 out/win-amd64/Release/unit_tests     # core, kernel, memory, codegen writer, timer queue
 ```
 - `ppc_tests` assembles `sdk/tests/ppc/asm/*.s` with `tools/binutils`, recompiles them with
-  `rexglue recompile-tests` and checks registers/flags. Expected: all pass (2026-09-27:
-  1463 cases, 5745 assertions). **An instruction bug is fixed by adding a case here first**
-  (format: `#_ REGISTER_IN` / `#_ REGISTER_OUT`, carry via `adde r6, r0, r0`), showing it
-  fails, then fixing the builder.
+  `rexglue recompile-tests` and checks registers/flags. Expected: all pass (2026-10-01:
+  1489 cases, 5897 assertions). **An instruction bug is fixed by adding a case here first**
+  (format: `#_ REGISTER_IN` / `#_ REGISTER_OUT`, carry via `adde r6, r0, r0`; instructions
+  binutils cannot assemble as `.long`), showing it fails, then fixing the builder. Check the
+  new case appears in the run (`ppc_tests "<file stem>*"` lists it): the case count is the
+  proof it was generated.
 - `unit_tests`: expected all pass except the known upstream Linux failures listed in
   `sdk/KIT_SDK_CHANGES.md` (chrono 1601 epoch, output-stamp path escaping).
 - Linux (e.g. a cloud check without Windows): clang >= 19 (clang 18 + libstdc++ 13 lacks

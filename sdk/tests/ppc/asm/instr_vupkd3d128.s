@@ -78,3 +78,31 @@ test_vupkd3d128_uint_2101010_2:
   .long 0x18681FF0
   blr
   #_ REGISTER_OUT v3 [7FC00000, 40400000, 40400000, 3F800001]
+
+# Negative overflow (-32768 for SHORT_2/SHORT_4, -512 for the 10-bit XYZ of 2_10_10_10) unpacks
+# to a quiet NaN in every lane (short2_3 above is the hardware case; Xenia applies it to all
+# lanes: x64_seq_vector.cc EmitSHORT_2/EmitSHORT_4/EmitUINT_2101010).
+test_vupkd3d128_short2_nan_x:
+  #_ REGISTER_IN v3 [CDCDCDCD, CDCDCDCD, CDCDCDCD, 80000005]
+  # vupkd3d128 v3, v3, 1
+  .long 0x18641FF0
+  blr
+  #_ REGISTER_OUT v3 [7FC00000, 40400005, 00000000, 3f800000]
+test_vupkd3d128_short4_nan:
+  #_ REGISTER_IN v3 [CDCDCDCD, CDCDCDCD, 80000001, 7FFF8000]
+  # vupkd3d128 v3, v3, 4
+  .long 0x18701FF0
+  blr
+  #_ REGISTER_OUT v3 [7FC00000, 40400001, 40407FFF, 7FC00000]
+test_vupkd3d128_uint_2101010_nan_y:
+  #_ REGISTER_IN v3 [CDCDCDCD, CDCDCDCD, CDCDCDCD, 00080000]
+  # vupkd3d128 v3, v3, 2
+  .long 0x18681FF0
+  blr
+  #_ REGISTER_OUT v3 [40400000, 7FC00000, 40400000, 3f800000]
+test_vupkd3d128_uint_2101010_nan_z:
+  #_ REGISTER_IN v3 [CDCDCDCD, CDCDCDCD, CDCDCDCD, 60000001]
+  # vupkd3d128 v3, v3, 2
+  .long 0x18681FF0
+  blr
+  #_ REGISTER_OUT v3 [40400001, 40400000, 7FC00000, 3f800001]

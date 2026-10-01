@@ -209,7 +209,11 @@ std::vector<TestSpec> ParseTestSpecs(const std::string& asmPath,
     return false;
   };
 
-  while (getline()) {
+  // `pending`: the REGISTER_OUT loop already read the line after a test, which may be the next
+  // test's label (tests written back to back); process it instead of reading past it.
+  bool pending = false;
+  while (pending || getline()) {
+    pending = false;
     if (line.empty() || line[0] == '#')
       continue;
     auto colonIndex = line.find(':');
@@ -231,9 +235,11 @@ std::vector<TestSpec> ParseTestSpecs(const std::string& asmPath,
       if (!getline())
         break;
     }
+    bool more = true;
     do {
       ApplyDirective(line, "REGISTER_OUT", "MEMORY_OUT", spec.outputs, spec.mem_outputs);
-    } while (getline() && !line.empty() && line[0] == '#');
+    } while ((more = getline()) && !line.empty() && line[0] == '#');
+    pending = more;
 
     if (!spec.inputs.empty() || !spec.outputs.empty() || !spec.mem_inputs.empty() ||
         !spec.mem_outputs.empty()) {
